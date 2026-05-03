@@ -1,7 +1,9 @@
 // FILE: lib/providers/auth_provider.dart
 import 'package:flutter/foundation.dart';
+
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
+import '../core/utils/role_permissions.dart'; // ← NEW: Import permissions
 
 class AuthProvider with ChangeNotifier {
   final AuthService _authService;
@@ -11,10 +13,37 @@ class AuthProvider with ChangeNotifier {
 
   AuthProvider(this._authService);
 
+  // ─────────────────────────────────────
+  // 🔹 Existing Getters (unchanged)
+  // ─────────────────────────────────────
   UserModel? get currentUser => _user;
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get isLoggedIn => _user != null;
+
+  // ─────────────────────────────────────
+  // 🔹 NEW: Role & Permission Helpers
+  // ─────────────────────────────────────
+
+  /// Get current user's role (safe null handling)
+  String? get userRole => _user?.userRole;
+
+  /// Check if current user has a specific permission
+  /// Usage: if (context.read<AuthProvider>().can('can_purchase')) { ... }
+  bool can(String permission) {
+    if (_user == null || _user!.userRole == null) return false;
+    return RolePermissions.can(_user!.userRole!, permission);
+  }
+
+  /// Get user-friendly role display name (e.g., 'buyer' → 'Buyer')
+  String get roleDisplayName {
+    if (_user?.userRole == null) return 'User';
+    return RolePermissions.getDisplayName(_user!.userRole!);
+  }
+
+  // ─────────────────────────────────────
+  // 🔹 Auth Methods (unchanged logic, minor formatting)
+  // ─────────────────────────────────────
 
   Future<bool> signUp({
     required String email,
@@ -89,6 +118,10 @@ class AuthProvider with ChangeNotifier {
       _setLoading(false);
     }
   }
+
+  // ─────────────────────────────────────
+  // 🔹 Internal Helpers
+  // ─────────────────────────────────────
 
   void _setLoading(bool value) {
     _isLoading = value;
