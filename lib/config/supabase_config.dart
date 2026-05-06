@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseConfig {
@@ -13,7 +14,7 @@ class SupabaseConfig {
         authFlowType: AuthFlowType.implicit,
       ),
     );
-    print('✅ Supabase initialized: $_url'); // Debug print
+    developer.log('✅ Supabase initialized: $_url', name: 'SupabaseConfig');
   }
 
   static SupabaseClient get client => Supabase.instance.client;

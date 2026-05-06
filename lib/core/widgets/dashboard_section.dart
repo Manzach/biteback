@@ -32,7 +32,7 @@ class DashboardSection extends StatelessWidget {
         border: Border.all(color: AppColors.grayBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -45,7 +45,7 @@ class DashboardSection extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: effectiveAccent.withOpacity(0.1),
+              color: effectiveAccent.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(

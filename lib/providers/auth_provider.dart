@@ -25,21 +25,20 @@ class AuthProvider with ChangeNotifier {
   // 🔹 NEW: Role & Permission Helpers
   // ─────────────────────────────────────
 
-  /// Get current user's role (safe null handling)
+  /// The current user's role, if signed in.
   String? get userRole => _user?.userRole;
 
-  /// Check if current user has a specific permission
-  /// Usage: if (context.read<AuthProvider>().can('can_purchase')) { ... }
+  /// Returns true when the signed-in user has the requested permission.
+  /// Example: if (context.read&ltAuthProvider&gt().can('can_purchase')) { ... }
   bool can(String permission) {
-    if (_user == null || _user!.userRole == null) return false;
-    return RolePermissions.can(_user!.userRole!, permission);
+    final role = userRole;
+    if (role == null) return false;
+    return RolePermissions.can(role, permission);
   }
 
-  /// Get user-friendly role display name (e.g., 'buyer' → 'Buyer')
-  String get roleDisplayName {
-    if (_user?.userRole == null) return 'User';
-    return RolePermissions.getDisplayName(_user!.userRole!);
-  }
+  /// Returns a friendly display name for the current role.
+  /// If the role is unknown, fall back to a generic label.
+  String get roleDisplayName => RolePermissions.getDisplayName(userRole ?? '');
 
   // ─────────────────────────────────────
   // 🔹 Auth Methods (unchanged logic, minor formatting)

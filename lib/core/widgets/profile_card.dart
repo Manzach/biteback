@@ -22,7 +22,7 @@ class ProfileCard extends StatelessWidget {
           // Avatar
           CircleAvatar(
             radius: 28,
-            backgroundColor: AppColors.primaryOrange.withOpacity(0.2),
+            backgroundColor: AppColors.primaryOrange.withValues(alpha: 0.2),
             child: Text(
               user.fullName?.substring(0, 1).toUpperCase() ?? 'U',
               style: const TextStyle(
@@ -57,7 +57,7 @@ class ProfileCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 // Role Badge
-                RoleBadge(role: user.userRole ?? 'buyer'),
+                RoleBadge(role: user.userRole),
               ],
             ),
           ),

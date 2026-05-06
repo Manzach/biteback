@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../screens/seller/seller_home.dart';
+import '../../screens/seller/create_listing_screen.dart';
 import 'dashboard_section.dart';
 
 class RoleDashboard extends StatelessWidget {
@@ -8,7 +10,7 @@ class RoleDashboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final config = _getRoleConfig(userRole);
+    final config = _getRoleConfig(userRole, context);
     
     return DashboardSection(
       title: config.title,
@@ -28,7 +30,7 @@ class RoleDashboard extends StatelessWidget {
     String buttonText,
     VoidCallback? onPressed,
     Color accentColor,
-  }) _getRoleConfig(String role) {
+  }) _getRoleConfig(String role, BuildContext context) {
     return switch (role.toLowerCase()) {
       'buyer' => (
           title: '🛒 Browse Rescued Food',
@@ -42,8 +44,16 @@ class RoleDashboard extends StatelessWidget {
           title: '🏪 Manage Listings',
           description: 'Post surplus food & track your sales.',
           icon: Icons.storefront_outlined,
-          buttonText: 'Create Listing',
-          onPressed: () {/* TODO: Navigate to seller dashboard */},
+          buttonText: 'View My Listings',
+          onPressed: () {
+            // Navigate to Seller Home
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const SellerHome(),
+              ),
+            );
+          },
           accentColor: Colors.green,
         ),
       'donor' => (

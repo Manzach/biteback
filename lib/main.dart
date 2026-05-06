@@ -13,7 +13,8 @@ import 'config/app_colors.dart';
 import 'screens/auth/splash_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/signup_screen.dart';  
-import 'screens/home/home_screen.dart';  // ← ADD THIS IMPORT
+import 'screens/home/home_screen.dart'; 
+ // ← ADD THIS IMPORT
 
 
 Future<void> main() async {

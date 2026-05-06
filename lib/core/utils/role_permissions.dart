@@ -1,10 +1,12 @@
-// lib/shared/utils/role_permissions.dart
+// lib/core/utils/role_permissions.dart
 // ✅ NO Flutter imports — pure Dart logic only!
 
-/// Centralized permission rules for all user roles.
-/// Update this file to change what roles can access.
+/// Central place for role permissions and display names.
+///
+/// When the app grows, add new roles and permissions here.
 class RolePermissions {
-  // Define capabilities per role
+  // Define capabilities per role.
+  // Each role maps to a set of named permissions.
   static const Map<String, Map<String, bool>> _rules = {
     'buyer': {
       'can_browse_food': true,

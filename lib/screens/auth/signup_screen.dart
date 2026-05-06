@@ -227,9 +227,9 @@ class _SignupScreenState extends State<SignupScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.error.withOpacity(0.1),
+                      color: AppColors.error.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                      border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
                     ),
                     child: Row(
                       children: [
@@ -296,7 +296,7 @@ class _SignupScreenState extends State<SignupScreen> {
           setState(() => _selectedRole = value);
         }
       },
-      selectedColor: AppColors.primaryOrange.withOpacity(0.2),
+      selectedColor: AppColors.primaryOrange.withValues(alpha: 0.2),
       backgroundColor: AppColors.grayLight,
       labelStyle: TextStyle(
         color: isSelected ? AppColors.primaryOrange : AppColors.textSecondary,
