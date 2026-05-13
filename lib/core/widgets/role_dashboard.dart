@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../screens/seller/seller_home.dart';
+import '../../screens/buyer/buyer_home.dart';
 import '../../screens/seller/create_listing_screen.dart';
 import 'dashboard_section.dart';
 
@@ -37,7 +38,14 @@ class RoleDashboard extends StatelessWidget {
           description: 'Find discounted near-expiry items around campus.',
           icon: Icons.restaurant_menu_outlined,
           buttonText: 'Explore Items',
-          onPressed: () {/* TODO: Navigate to buyer feed */},
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const BuyerHome(),
+              ),
+            );
+          },
           accentColor: Colors.orange,
         ),
       'seller' => (
