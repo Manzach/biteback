@@ -3,6 +3,8 @@ import '../../screens/seller/seller_home.dart';
 import '../../screens/buyer/buyer_home.dart';
 import '../../screens/seller/create_listing_screen.dart';
 import 'dashboard_section.dart';
+import 'package:provider/provider.dart'; // ✅ Add this if not already present
+import '../../providers/buyer_provider.dart'; // ✅ Add this
 
 class RoleDashboard extends StatelessWidget {
   final String userRole;

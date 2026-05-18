@@ -1,11 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../config/app_colors.dart';
+import '../../providers/buyer_provider.dart';
+import '../../models/food_listing.dart'; // ✅ Fixed: matches your actual filename
+import 'listing_detail_screen.dart';
 
-class BuyerHome extends StatelessWidget {
+class BuyerHome extends StatefulWidget {
   const BuyerHome({super.key});
 
   @override
+  State<BuyerHome> createState() => _BuyerHomeState();
+}
+
+class _BuyerHomeState extends State<BuyerHome> {
+  @override
+  void initState() {
+    super.initState();
+    // Fetch listings when screen loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<BuyerProvider>().loadListings();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final provider = context.watch<BuyerProvider>();
+
     return Scaffold(
       backgroundColor: AppColors.white,
       body: CustomScrollView(
@@ -18,47 +38,164 @@ class BuyerHome extends StatelessWidget {
             actions: [
               IconButton(
                 icon: const Icon(Icons.shopping_cart, color: Colors.white),
-                onPressed: () {/* TODO: Open cart */},
+                onPressed: () {
+                  // TODO: Navigate to order history
+                  // Navigator.pushNamed(context, '/buyer/orders');
+                },
               ),
             ],
           ),
           
-          // Content
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Available Near You',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          // Loading State
+          if (provider.isLoading)
+            const SliverToBoxAdapter(
+              child: Center(child: Padding(
+                padding: EdgeInsets.all(40),
+                child: CircularProgressIndicator(),
+              )),
+            ),
+          
+          // Error State
+          if (provider.errorMessage != null)
+            SliverToBoxAdapter(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.error_outline, size: 48, color: Colors.grey),
+                      const SizedBox(height: 12),
+                      Text(
+                        provider.errorMessage!,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.grey[700]),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () => provider.loadListings(),
+                        child: const Text('Retry'),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  // TODO: Replace with real food list
-                  _buildPlaceholderCard('🍎 Fresh Fruits - 50% off', 'IIUM Cafeteria'),
-                  _buildPlaceholderCard('🥪 Sandwiches - Near Expiry', 'Kulliyyah Store'),
-                  _buildPlaceholderCard('🥤 Drinks Bundle', 'Student Hub'),
-                ],
+                ),
               ),
             ),
-          ),
+          
+          // Content (only show if not loading and no error)
+          if (!provider.isLoading && provider.errorMessage == null)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Available Near You',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Empty State
+                    if (provider.listings.isEmpty)
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(40),
+                          child: Text(
+                            'No active listings right now. 🍽️\nCheck back soon!',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                        ),
+                      )
+                    else
+                      // Dynamic List of Real Listings
+                      ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: provider.listings.length,
+                        itemBuilder: (context, index) {
+                          final item = provider.listings[index];
+                          return _buildFoodCard(item);
+                        },
+                      ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildPlaceholderCard(String title, String location) {
+  // Card builder for FoodListing data
+  Widget _buildFoodCard(FoodListing item) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
         contentPadding: const EdgeInsets.all(16),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text(location, style: TextStyle(color: Colors.grey[600])),
+        leading: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: _buildImage(item.photoUrl), // ✅ Extracted to helper method
+        ),
+        title: Text(item.foodName, style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(item.location, style: TextStyle(color: Colors.grey[600])),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Text(
+                  'RM${item.discountedPrice.toStringAsFixed(2)}',
+                  style: const TextStyle(color: AppColors.primaryOrange, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'RM${item.originalPrice.toStringAsFixed(2)}',
+                  style: TextStyle(decoration: TextDecoration.lineThrough, color: Colors.grey[500], fontSize: 12),
+                ),
+              ],
+            ),
+          ],
+        ),
         trailing: const Icon(Icons.chevron_right),
-        onTap: () {/* TODO: Navigate to item detail */},
+        onTap: () {
+          // Navigate to detail screen with the selected item
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ListingDetailScreen(listing: item),
+            ),
+          );
+        },
       ),
     );
+  }
+
+  // ✅ Helper method: safely handles nullable photoUrl
+  Widget _buildImage(String? url) {
+    if (url?.isNotEmpty == true) {
+      return Image.network(
+        url!, // Safe to use ! because we checked above
+        width: 50,
+        height: 50,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Container(
+          width: 50,
+          height: 50,
+          color: Colors.grey[200],
+          child: const Icon(Icons.restaurant, color: Colors.grey),
+        ),
+      );
+    } else {
+      return Container(
+        width: 50,
+        height: 50,
+        color: Colors.grey[200],
+        child: const Icon(Icons.restaurant, color: Colors.grey),
+      );
+    }
   }
 }

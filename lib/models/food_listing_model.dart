@@ -66,7 +66,12 @@ class FoodListing {
     return ((originalPrice - discountedPrice) / originalPrice * 100);
   }
 
-  int get hoursUntilExpiry {
-    return expiryDate.difference(DateTime.now()).inHours;
-  }
+ int get hoursUntilExpiry {
+  final hours = expiryDate.difference(DateTime.now()).inHours;
+  return hours < 0 ? 0 : hours;
+}
+
+bool get isExpired {
+  return expiryDate.isBefore(DateTime.now());
+}
 }
