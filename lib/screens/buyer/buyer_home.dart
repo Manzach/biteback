@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/app_colors.dart';
 import '../../providers/buyer_provider.dart';
-import '../../models/food_listing.dart'; // ✅ Fixed: matches your actual filename
+import '../../providers/cart_provider.dart'; // ✅ ADD THIS for cart badge
+import '../../models/food_listing_model.dart';
 import 'listing_detail_screen.dart';
+import 'cart_screen.dart'; // ✅ ADD THIS for cart navigation
 
 class BuyerHome extends StatefulWidget {
   const BuyerHome({super.key});
@@ -25,23 +27,46 @@ class _BuyerHomeState extends State<BuyerHome> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<BuyerProvider>();
+    final cart = context.watch<CartProvider>(); // ✅ Watch cart for live badge
 
     return Scaffold(
       backgroundColor: AppColors.white,
       body: CustomScrollView(
         slivers: [
-          // App Bar
+          // ✅ App Bar with Cart Icon + Live Badge
           SliverAppBar(
             backgroundColor: AppColors.primaryOrange,
             title: const Text('🛒 Browse Food', style: TextStyle(color: Colors.white)),
             floating: true,
             actions: [
-              IconButton(
-                icon: const Icon(Icons.shopping_cart, color: Colors.white),
-                onPressed: () {
-                  // TODO: Navigate to order history
-                  // Navigator.pushNamed(context, '/buyer/orders');
-                },
+              Consumer<CartProvider>( // ✅ Live badge updates automatically
+                builder: (context, cart, _) => Stack(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.shopping_cart_outlined, color: Colors.white),
+                      onPressed: () => Navigator.pushNamed(context, '/cart'), // ✅ Navigate to cart
+                    ),
+                    // ✅ Badge shows item count (only if > 0)
+                    if (cart.itemCount > 0)
+                      Positioned(
+                        right: 8,
+                        top: 8,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Colors.red, // High-contrast badge color
+                            shape: BoxShape.circle,
+                          ),
+                          constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                          child: Text(
+                            '${cart.itemCount}',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -137,7 +162,7 @@ class _BuyerHomeState extends State<BuyerHome> {
         contentPadding: const EdgeInsets.all(16),
         leading: ClipRRect(
           borderRadius: BorderRadius.circular(8),
-          child: _buildImage(item.photoUrl), // ✅ Extracted to helper method
+          child: _buildImage(item.photoUrl),
         ),
         title: Text(item.foodName, style: const TextStyle(fontWeight: FontWeight.w600)),
         subtitle: Column(
@@ -174,11 +199,11 @@ class _BuyerHomeState extends State<BuyerHome> {
     );
   }
 
-  // ✅ Helper method: safely handles nullable photoUrl
+  // Helper method: safely handles nullable photoUrl
   Widget _buildImage(String? url) {
     if (url?.isNotEmpty == true) {
       return Image.network(
-        url!, // Safe to use ! because we checked above
+        url!,
         width: 50,
         height: 50,
         fit: BoxFit.cover,

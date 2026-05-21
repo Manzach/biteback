@@ -1,75 +1,129 @@
 import 'package:flutter/material.dart';
-import 'package:qr_flutter/qr_flutter.dart'; // Add to pubspec.yaml: qr_flutter: ^4.1.0
+import 'package:qr_flutter/qr_flutter.dart';
 import '../../models/order_model.dart';
 import '../../config/app_colors.dart';
 
 class OrderSuccessScreen extends StatelessWidget {
-  final OrderModel order;
-  const OrderSuccessScreen({super.key, required this.order});
+  final Map<String, List<OrderModel>> groupedOrders;
+  const OrderSuccessScreen({super.key, required this.groupedOrders});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Order Confirmed')),
       body: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(16),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(Icons.check_circle, size: 64, color: AppColors.secondaryGreen),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             const Text(
               'Order Placed Successfully!',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 24),
-            
-            // 🎫 QR Code for Pickup Verification
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(color: Colors.grey.shade200, blurRadius: 8),
-                ],
-              ),
-              child: QrImageView(
-                data: order.qrCode,
-                version: QrVersions.auto,
-                size: 200,
-                backgroundColor: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
             const Text(
-              'Show this QR code to the seller when picking up your food.',
+              'Show each QR code at its respective pickup location.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 20),
             
-            // 📋 Order Summary Card
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    _summaryRow('Order ID', order.id.substring(0, 8)),
-                    _summaryRow('Status', order.status.toUpperCase()),
-                    _summaryRow('Placed At', _formatTime(order.createdAt)),
-                  ],
-                ),
+            // ✅ LIST OF QR CODES GROUPED BY LOCATION
+            Expanded(
+              child: ListView.builder(
+                itemCount: groupedOrders.length,
+                itemBuilder: (_, i) {
+                  final entry = groupedOrders.entries.elementAt(i);
+                  final location = entry.key;
+                  final orders = entry.value;
+                  
+                  // ✅ Calculate total items for this location
+                  final totalQuantity = orders.fold<int>(
+                    0,
+                    (sum, order) => sum + order.quantity,
+                  );
+                  
+                  // ✅ Generate location-specific QR payload
+                  final qrPayload = 'BB-LOC-${location.replaceAll(' ', '_')}-${orders.map((o) => o.id.substring(0, 8)).join('-')}';
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          // 📍 Location Header
+                          Text(
+                            '📍 $location',
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 4),
+                          
+                          // 📦 Total Items Text (FIXED: shows actual quantity)
+                          Text(
+                            '$totalQuantity item${totalQuantity > 1 ? 's' : ''} to collect',
+                            style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                          ),
+                          const SizedBox(height: 12),
+                          
+                          // 📋 List of Items with Quantities
+                          ...orders.map((order) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  '• Item #${order.listingId.substring(0, 6)}', // Short ID for display
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                                Text(
+                                  'x${order.quantity}',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                ),
+                              ],
+                            ),
+                          )),
+                          
+                          const SizedBox(height: 12),
+                          
+                          // 🎫 QR Code
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(color: Colors.grey.shade200, blurRadius: 8),
+                              ],
+                            ),
+                            child: QrImageView(
+                              data: qrPayload,
+                              size: 180,
+                              version: QrVersions.auto,
+                              backgroundColor: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          
+                          // 🔤 QR Code Reference Text
+                          Text(
+                            'Scan at: $location',
+                            style: TextStyle(color: Colors.grey[500], fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
-            const Spacer(),
             
-            // 🔘 Navigation Buttons
+            // 🔘 Back to Home Button
             ElevatedButton(
               onPressed: () => Navigator.pushNamedAndRemoveUntil(
-                context, 
-                '/home', 
+                context,
+                '/home',
                 (route) => false,
               ),
               style: ElevatedButton.styleFrom(
@@ -78,36 +132,9 @@ class OrderSuccessScreen extends StatelessWidget {
               ),
               child: const Text('Back to Home', style: TextStyle(color: Colors.white)),
             ),
-            const SizedBox(height: 12),
-            TextButton(
-              onPressed: () {
-                // TODO: Navigate to order history (create later)
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Order history coming soon!')),
-                );
-              },
-              child: const Text('View My Orders'),
-            ),
           ],
         ),
       ),
     );
-  }
-
-  Widget _summaryRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: TextStyle(color: Colors.grey[600])),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
-        ],
-      ),
-    );
-  }
-
-  String _formatTime(DateTime time) {
-    return '${time.day}/${time.month}/${time.year} ${time.hour}:${time.minute.toString().padLeft(2, '0')}';
   }
 }

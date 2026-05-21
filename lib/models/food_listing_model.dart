@@ -27,6 +27,7 @@ class FoodListing {
     required this.originalPrice,
   });
 
+  // ✅ Factory: converts Supabase JSON → FoodListing
   factory FoodListing.fromJson(Map<String, dynamic> json) {
     return FoodListing(
       id: json['id'] as String,
@@ -44,6 +45,7 @@ class FoodListing {
     );
   }
 
+  // ✅ Factory: converts FoodListing → JSON (for debugging/sending)
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -61,17 +63,39 @@ class FoodListing {
     };
   }
 
+  // ✅ NEW: Empty factory to prevent crashes in firstWhere() fallbacks
+  factory FoodListing.empty() {
+    return FoodListing(
+      id: '',
+      sellerId: '',
+      foodName: '',
+      description: '',
+      discountedPrice: 0,
+      quantity: 0,
+      expiryDate: DateTime.now(),
+      location: '',
+      photoUrl: null,
+      createdAt: DateTime.now(),
+      isSold: false,
+      originalPrice: 0,
+    );
+  }
+
+  // ✅ Getters (unchanged)
   double get discountPercentage {
     if (originalPrice == 0) return 0;
     return ((originalPrice - discountedPrice) / originalPrice * 100);
   }
 
- int get hoursUntilExpiry {
-  final hours = expiryDate.difference(DateTime.now()).inHours;
-  return hours < 0 ? 0 : hours;
-}
+  int get hoursUntilExpiry {
+    final hours = expiryDate.difference(DateTime.now()).inHours;
+    return hours < 0 ? 0 : hours;
+  }
 
-bool get isExpired {
-  return expiryDate.isBefore(DateTime.now());
-}
+  bool get isExpired {
+    return expiryDate.isBefore(DateTime.now());
+  }
+
+  // ✅ Helper: Check if item is still available for purchase
+  bool get isAvailable => !isSold && !isExpired && quantity > 0;
 }

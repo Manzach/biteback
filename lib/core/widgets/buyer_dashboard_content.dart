@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/buyer_provider.dart';
-import '../../models/food_listing.dart'; // ✅ Make sure this matches your actual filename
+import '../../models/food_listing_model.dart'; // ✅ Make sure this matches your actual filename
 import '../../config/app_colors.dart';
 import '../../screens/buyer/listing_detail_screen.dart';
 

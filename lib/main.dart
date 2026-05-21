@@ -4,7 +4,8 @@ import 'package:provider/provider.dart';
 // 🔐 Config & Services
 import 'config/supabase_config.dart';
 import 'providers/auth_provider.dart';
-import 'providers/buyer_provider.dart'; // ✅ Buyer state management
+import 'providers/buyer_provider.dart';
+import 'providers/cart_provider.dart'; // ✅ ADD THIS for cart functionality
 import 'services/auth_service.dart';
 
 // 🎨 Design System
@@ -20,7 +21,8 @@ import 'screens/home/home_screen.dart';
 import 'screens/buyer/buyer_home.dart';
 import 'screens/buyer/listing_detail_screen.dart';
 import 'screens/buyer/order_success_screen.dart';
-
+import 'screens/buyer/cart_screen.dart'; // ✅ ADD THIS for cart screen
+import 'screens/buyer/checkout_confirmation_screen.dart'; // ✅ ADD THIS for checkout
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -52,6 +54,9 @@ class MyApp extends StatelessWidget {
         
         // ✅ Buyer provider - manages listings, orders, QR flow
         ChangeNotifierProvider(create: (_) => BuyerProvider()),
+        
+        // ✅ Cart provider - manages cart items, checkout, multi-location QR
+        ChangeNotifierProvider(create: (_) => CartProvider()),
       ],
       child: MaterialApp(
         title: 'BiteBack',
@@ -89,14 +94,18 @@ class MyApp extends StatelessWidget {
           
           // ✅ BUYER ROUTES
           '/buyer/home': (context) => const BuyerHome(),
+          '/cart': (context) => const CartScreen(), // ✅ ADD THIS route
           
           // Note: Screens that need data (listing, order) use Navigator.push
           // These placeholders prevent crashes if accidentally navigated via named route
           '/buyer/listing-detail': (context) => const _PlaceholderScreen(
-            message: 'Use Navigator.push for listing detail (requires FoodListingModel)',
+            message: 'Use Navigator.push for listing detail (requires FoodListing)',
           ),
           '/buyer/order-success': (context) => const _PlaceholderScreen(
-            message: 'Use Navigator.push for order success (requires OrderModel)',
+            message: 'Use Navigator.push for order success (requires grouped orders)',
+          ),
+          '/buyer/checkout': (context) => const _PlaceholderScreen(
+            message: 'Use Navigator.push for checkout (requires CartProvider)',
           ),
         },
         
