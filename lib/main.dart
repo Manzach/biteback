@@ -1,45 +1,121 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-// 🔐 Config & Services
+// ============================================================================
+// CONFIG & SERVICES
+// ============================================================================
 import 'config/supabase_config.dart';
-import 'providers/auth_provider.dart';
-import 'providers/buyer_provider.dart';
-import 'providers/cart_provider.dart'; // ✅ ADD THIS for cart functionality
 import 'services/auth_service.dart';
 
-// 🎨 Design System
+// ============================================================================
+// PROVIDERS (State Management)
+// ============================================================================
+import 'providers/auth_provider.dart';
+import 'providers/buyer_provider.dart';
+import 'providers/cart_provider.dart';
+import 'providers/donor_provider.dart';
+// import 'providers/seller_provider.dart'; // TODO: Uncomment when seller module is ready
+// import 'providers/admin_provider.dart';  // TODO: Uncomment when admin module is ready
+
+// ============================================================================
+// DESIGN SYSTEM
+// ============================================================================
 import 'config/app_colors.dart';
 
-// 🖥️ Screens
+// ============================================================================
+// AUTH SCREENS
+// ============================================================================
 import 'screens/auth/splash_screen.dart';
 import 'screens/auth/login_screen.dart';
-import 'screens/auth/signup_screen.dart';  
+import 'screens/auth/signup_screen.dart';
+
+// ============================================================================
+// MAIN DASHBOARD
+// ============================================================================
 import 'screens/home/home_screen.dart';
 
-// 🛒 Buyer Screens
+// ============================================================================
+// BUYER SCREENS (UC-04, UC-07)
+// ============================================================================
 import 'screens/buyer/buyer_home.dart';
 import 'screens/buyer/listing_detail_screen.dart';
 import 'screens/buyer/order_success_screen.dart';
-import 'screens/buyer/cart_screen.dart'; // ✅ ADD THIS for cart screen
-import 'screens/buyer/checkout_confirmation_screen.dart'; // ✅ ADD THIS for checkout
+import 'screens/buyer/cart_screen.dart';
+import 'screens/buyer/checkout_confirmation_screen.dart';
 
+// ============================================================================
+// DONOR SCREENS (UC-06)
+// ============================================================================
+import 'screens/donor/donor_home.dart';
+import 'screens/donor/create_donation_screen.dart';
+
+// ============================================================================
+// SELLER/ADMIN SCREENS (Placeholders - Uncomment when ready)
+// ============================================================================
+// import 'screens/seller/seller_home.dart';
+// import 'screens/admin/admin_home.dart';
+
+// ============================================================================
+// APP ENTRY POINT
+// ============================================================================
+/// Initializes Supabase, auth, and providers before launching the app
+/// Aligns with FYP Report: Figure 26 (System Architecture), Section 4.2
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // 1. Initialize Supabase
-  await SupabaseConfig.initialize();
-  
-  // 2. Create services + providers
-  final authService = AuthService(SupabaseConfig.client);
-  final authProvider = AuthProvider(authService);
-  
-  // 3. Check auth state BEFORE showing UI
-  await authProvider.checkAuthStatus();
-  
-  runApp(MyApp(authProvider: authProvider));
+  try {
+    // 1. Initialize Supabase backend
+    await SupabaseConfig.initialize();
+    
+    // 2. Create auth service + provider
+    final authService = AuthService(SupabaseConfig.client);
+    final authProvider = AuthProvider(authService);
+    
+    // 3. Check auth state BEFORE showing UI (prevents flicker)
+    await authProvider.checkAuthStatus();
+    
+    // 4. Launch app with initialized providers
+    runApp(MyApp(authProvider: authProvider));
+    
+  } catch (e) {
+    // Fallback UI if Supabase fails to initialize
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                const SizedBox(height: 16),
+                const Text(
+                  'Failed to connect to server.',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Please check your internet connection.',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () => main(), // Retry
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
+// ============================================================================
+// ROOT WIDGET
+// ============================================================================
+/// Configures MultiProvider, MaterialApp theme, and routing
+/// Uses RoleRouter logic (via HomeScreen) for role-based navigation
 class MyApp extends StatelessWidget {
   final AuthProvider authProvider;
   
@@ -49,20 +125,29 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        // Auth provider (already initialized)
+        // 🔐 Auth Provider (pre-initialized to preserve session)
         ChangeNotifierProvider.value(value: authProvider),
         
-        // ✅ Buyer provider - manages listings, orders, QR flow
+        // 🛒 Buyer Provider - manages listings, orders, QR flow (UC-04, UC-07)
         ChangeNotifierProvider(create: (_) => BuyerProvider()),
         
-        // ✅ Cart provider - manages cart items, checkout, multi-location QR
+        // 🛍️ Cart Provider - manages cart items, checkout, multi-location QR
         ChangeNotifierProvider(create: (_) => CartProvider()),
+        
+        // 🎁 Donor Provider - manages donation advertisements (UC-06)
+        ChangeNotifierProvider(create: (_) => DonorProvider()),
+        
+        // 🏪 Seller Provider - TODO: Uncomment when seller module is complete
+        // ChangeNotifierProvider(create: (_) => SellerProvider()),
+        
+        // ⚙️ Admin Provider - TODO: Uncomment when admin module is complete
+        // ChangeNotifierProvider(create: (_) => AdminProvider()),
       ],
       child: MaterialApp(
         title: 'BiteBack',
         debugShowCheckedModeBanner: false,
         
-        // 🎨 Theme - Matches Figma
+        // 🎨 Theme - Matches Figma prototype (Figure 35-42)
         theme: ThemeData(
           primaryColor: AppColors.primaryOrange,
           scaffoldBackgroundColor: AppColors.white,
@@ -86,18 +171,28 @@ class MyApp extends StatelessWidget {
         // 🧭 Navigation Routes
         initialRoute: '/',
         routes: {
+          // Auth Flow
           '/': (context) => const SplashScreen(),
           '/login': (context) => const LoginScreen(),
           '/signup': (context) => const SignupScreen(),
+          
+          // Main Dashboard (role-aware via HomeScreen)
           '/home': (context) => const HomeScreen(),
           '/forgot-password': (context) => const Placeholder(),
           
-          // ✅ BUYER ROUTES
+          // ✅ BUYER ROUTES (UC-04: Purchase, UC-07: View Donations)
           '/buyer/home': (context) => const BuyerHome(),
-          '/cart': (context) => const CartScreen(), // ✅ ADD THIS route
+          '/cart': (context) => const CartScreen(),
           
-          // Note: Screens that need data (listing, order) use Navigator.push
-          // These placeholders prevent crashes if accidentally navigated via named route
+          // ✅ DONOR ROUTES (UC-06: Publish Donation)
+          '/donor/home': (context) => const DonorHome(),
+          
+          // 🔄 SELLER/ADMIN ROUTES - TODO: Uncomment when modules are ready
+          // '/seller/home': (context) => const SellerHome(),
+          // '/admin/home': (context) => const AdminHome(),
+          
+          // ⚠️ Placeholder routes for screens that require constructor data
+          // These prevent crashes if accidentally navigated via named route
           '/buyer/listing-detail': (context) => const _PlaceholderScreen(
             message: 'Use Navigator.push for listing detail (requires FoodListing)',
           ),
@@ -107,12 +202,37 @@ class MyApp extends StatelessWidget {
           '/buyer/checkout': (context) => const _PlaceholderScreen(
             message: 'Use Navigator.push for checkout (requires CartProvider)',
           ),
+          '/donor/create': (context) => const _PlaceholderScreen(
+            message: 'Use Navigator.push for create donation (requires form data)',
+          ),
         },
         
-        // 🚫 Handle unknown routes gracefully
+        // 🚫 Handle unknown routes gracefully (prevents white screen crashes)
         onUnknownRoute: (settings) => MaterialPageRoute(
-          builder: (context) => const Scaffold(
-            body: Center(child: Text('Page not found')),
+          builder: (context) => Scaffold(
+            appBar: AppBar(title: const Text('Error')),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 48, color: Colors.grey),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Page not found: ${settings.name}',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pushNamedAndRemoveUntil(
+                      context,
+                      '/home',
+                      (route) => false,
+                    ),
+                    child: const Text('Go Home'),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -120,7 +240,12 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// ✅ Helper widget for placeholder routes
+// ============================================================================
+// HELPER: Placeholder Screen for Data-Dependent Routes
+// ============================================================================
+/// Displays a friendly message when a route requiring constructor data
+/// is accidentally accessed via named navigation.
+/// Prevents runtime crashes during development.
 class _PlaceholderScreen extends StatelessWidget {
   final String message;
   const _PlaceholderScreen({required this.message});
@@ -132,10 +257,22 @@ class _PlaceholderScreen extends StatelessWidget {
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(
-            message,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 14, color: Colors.grey),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.info_outline, size: 48, color: Colors.orange),
+              const SizedBox(height: 16),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Go Back'),
+              ),
+            ],
           ),
         ),
       ),

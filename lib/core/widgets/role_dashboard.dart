@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../screens/seller/seller_home.dart';
 import '../../screens/buyer/buyer_home.dart';
+import '../../screens/donor/donor_home.dart';
 import '../../screens/seller/create_listing_screen.dart';
 import 'dashboard_section.dart';
 import 'package:provider/provider.dart'; // ✅ Add this if not already present
@@ -71,7 +72,14 @@ class RoleDashboard extends StatelessWidget {
           description: 'Share food with those in need & track impact.',
           icon: Icons.volunteer_activism_outlined,
           buttonText: 'Post Donation',
-          onPressed: () {/* TODO: Navigate to donation form */},
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const DonorHome(),
+              ),
+            );
+          },
           accentColor: Colors.blue,
         ),
       'admin' => (
