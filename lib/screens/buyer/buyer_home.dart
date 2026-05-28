@@ -8,6 +8,7 @@ import '../../models/donation_model.dart';
 import 'listing_detail_screen.dart';
 import 'cart_screen.dart';
 import 'donation_detail_screen.dart';
+import 'profile_screen.dart';
 
 // ============================================================================
 // BUYER HOME SCREEN
@@ -65,91 +66,70 @@ class _BuyerHomeState extends State<BuyerHome> {
           // Floating AppBar with logo, menu/profile icons, and cart with live badge
           // Matches prototype Figure 38 (Buyer Dashboard)
           // ==================================================================
-          SliverAppBar(
-            backgroundColor: AppColors.primaryOrange,
-            floating: true, // AppBar hides/shows on scroll for more content space
-            pinned: false,
-            title: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Menu & Profile Icons (Left side - TODO: Implement navigation)
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.menu, color: Colors.white),
-                      onPressed: () {
-                        // TODO: Open side drawer menu
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Menu coming soon!')),
-                        );
-                      },
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.person_outline, color: Colors.white),
-                      onPressed: () {
-                        // TODO: Navigate to user profile
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Profile coming soon!')),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-                
-                // App Logo (Center) - Matches FYP branding
-                const Text(
-                  'bite.',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'Poppins', // Use your custom font if added
-                  ),
-                ),
-                
-                // Cart Icon with Live Badge (Right side)
-                // Uses Consumer to rebuild only badge when cart changes
-                Consumer<CartProvider>(
-                  builder: (context, cart, _) => Stack(
-                    children: [
-                      // Cart button - navigates to cart screen
-                      IconButton(
-                        icon: const Icon(Icons.shopping_cart, color: Colors.white),
-                        onPressed: () => Navigator.pushNamed(context, '/cart'),
-                        tooltip: 'View Cart',
-                      ),
-                      // Badge showing number of items in cart (only if > 0)
-                      if (cart.itemCount > 0)
-                        Positioned(
-                          right: 0,
-                          top: 0,
-                          child: Container(
-                            padding: const EdgeInsets.all(3),
-                            decoration: const BoxDecoration(
-                              color: Colors.red, // High-contrast badge color
-                              shape: BoxShape.circle,
-                            ),
-                            constraints: const BoxConstraints(
-                              minWidth: 16,
-                              minHeight: 16,
-                            ),
-                            child: Text(
-                              '${cart.itemCount}',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
+SliverAppBar(
+  backgroundColor: AppColors.primaryOrange,
+  floating: true,
+  pinned: true, // ✅ CHANGE: Keeps AppBar visible & prevents stretching
+  toolbarHeight: 56, // ✅ Fixed height prevents animation stretch
+  title: Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: [
+      // Profile Icon
+      IconButton(
+        icon: const Icon(Icons.person_outline, color: Colors.white),
+        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),
+      ),
+      
+      // ✅ Logo with fixed constraints to prevent stretching
+      SizedBox(
+        width: 120, // Fixed width slot
+        child: Image.asset(
+          'assets/logo_black.png',
+          height: 120,
+          fit: BoxFit.contain,
+        ),
+      ),
+      
+      // Cart Icon with Live Badge
+      Consumer<CartProvider>(
+        builder: (context, cart, _) => Stack(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.shopping_cart, color: Colors.white),
+              onPressed: () => Navigator.pushNamed(context, '/cart'),
+              tooltip: 'View Cart',
             ),
-          ),
+            if (cart.itemCount > 0)
+              Positioned(
+                right: 0,
+                top: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 16,
+                    minHeight: 16,
+                  ),
+                  child: Text(
+                    '${cart.itemCount}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    ],
+  ),
+),
           
           // ==================================================================
           // POPULAR PRODUCT CATEGORIES

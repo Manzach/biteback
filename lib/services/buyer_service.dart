@@ -1,7 +1,18 @@
+// FILE: lib/services/buyer_service.dart
+// ============================================================================
+// BUYER SERVICE
+// ============================================================================
+// Handles Supabase database operations for buyer features
+// - Fetch active food listings (UC-04)
+// - Create & retrieve orders with QR codes (UC-04)
+// - Fetch donation advertisements (UC-07)
+// Aligns with FYP Report: Table 11 (Food Listing), UC-04, UC-07
+// ============================================================================
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/food_listing_model.dart';
 import '../models/order_model.dart';
-import '../models/donation_model.dart'; // ✅ ADD THIS for donation support
+import '../models/donation_model.dart';
 
 class BuyerService {
   final SupabaseClient _client = Supabase.instance.client;
@@ -10,7 +21,15 @@ class BuyerService {
   // 🍽️ FOOD LISTINGS (UC-04: Purchase Near-Expiry Food)
   // ==================================================================
 
-  /// Fetch active, unsold, non-expired food listings from sellers
+  /// Fetch active, unsold, non-expired, VISIBLE food listings from sellers
+  /// 
+  /// Filters applied:
+  /// - is_sold = false (not yet purchased)
+  /// - is_hidden = false (seller hasn't hidden it) ✅ NEW
+  /// - expiry_date >= now (still valid)
+  /// 
+  /// Returns listings ordered by creation date (newest first)
+  // ==================================================================
   Future<List<FoodListing>> fetchActiveListings() async {
     try {
       final now = DateTime.now().toIso8601String();
@@ -19,6 +38,7 @@ class BuyerService {
           .from('food_listings')
           .select()
           .eq('is_sold', false)
+          .eq('is_hidden', false)  // ✅ ADD THIS: Exclude hidden listings
           .gte('expiry_date', now)
           .order('created_at', ascending: false);
 
@@ -35,6 +55,14 @@ class BuyerService {
   // ==================================================================
 
   /// Create a new order and generate unique QR code for pickup verification
+  /// 
+  /// Parameters:
+  ///   - listingId: The food listing being purchased
+  ///   - quantity: Number of items to order (default: 1)
+  /// 
+  /// Returns:
+  ///   OrderModel with generated QR code payload
+  // ==================================================================
   Future<OrderModel> createOrder({
     required String listingId,
     int quantity = 1,
@@ -65,6 +93,8 @@ class BuyerService {
   }
 
   /// Get order history for current buyer (for order tracking)
+  /// Returns all orders regardless of status (pending/collected/cancelled)
+  // ==================================================================
   Future<List<OrderModel>> getBuyerOrders() async {
     try {
       final buyerId = _client.auth.currentUser?.id;
@@ -90,6 +120,7 @@ class BuyerService {
 
   /// Fetch all AVAILABLE donation advertisements posted by donors
   /// Returns only donations with status 'Available' for buyers to view
+  // ==================================================================
   Future<List<DonationModel>> fetchDonations() async {
     try {
       final response = await _client
@@ -107,6 +138,8 @@ class BuyerService {
   }
 
   /// Fetch a single donation by ID (for detail screen)
+  /// Returns null if donation doesn't exist or was collected/deleted
+  // ==================================================================
   Future<DonationModel?> getDonationById(String donationId) async {
     try {
       final response = await _client
@@ -123,6 +156,8 @@ class BuyerService {
   }
 
   /// Fetch donations by pickup location (for location-based filtering)
+  /// Uses case-insensitive partial match for flexible location search
+  // ==================================================================
   Future<List<DonationModel>> fetchDonationsByLocation(String location) async {
     try {
       final response = await _client

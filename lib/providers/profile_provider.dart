@@ -1,72 +1,57 @@
-// FILE: lib/providers/profile_provider.dart
-import 'package:flutter/foundation.dart';
-import '../models/profile_model.dart';
+﻿import 'package:flutter/foundation.dart';
 import '../services/profile_service.dart';
 
+// ============================================================================
+// PROFILE PROVIDER
+// ============================================================================
+// Manages profile update state for buyer profile editing.
+// Provides loading/error feedback to the UI and delegates database
+// operations to ProfileService.
+// ============================================================================
+
 class ProfileProvider with ChangeNotifier {
-  final ProfileService _profileService;
-  
-  ProfileModel? _profile;
+  final ProfileService _service;
+
+  ProfileProvider(this._service);
+
   bool _isLoading = false;
-  String? _error;
+  String? _errorMessage;
 
-  ProfileProvider(this._profileService);
-
-  // Getters
-  ProfileModel? get profile => _profile;
   bool get isLoading => _isLoading;
-  String? get error => _error;
+  String? get errorMessage => _errorMessage;
 
-  // ✅ Load profile on app start or after login
-  Future<void> loadProfile() async {
-    _setLoading(true);
-    _error = null;
-    
-    try {
-      _profile = await _profileService.getCurrentProfile();
-      notifyListeners();
-    } catch (e) {
-      _error = e.toString().replaceAll('Exception: ', '');
-    } finally {
-      _setLoading(false);
-    }
-  }
-
-  // ✅ Update profile & refresh state
   Future<bool> updateProfile({
+    required String userId,
     String? fullName,
     String? phoneNumber,
-    String? role,
   }) async {
-    _setLoading(true);
-    _error = null;
-    
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
     try {
-      final success = await _profileService.updateProfile(
+      final success = await _service.updateProfile(
+        userId: userId,
         fullName: fullName,
         phoneNumber: phoneNumber,
-        role: role,
       );
-      
-      if (success) {
-        // Refresh profile after update
-        await loadProfile();
-        return true;
+
+      if (!success) {
+        _errorMessage = 'Failed to update profile. Please try again.';
       }
-      _error = 'Failed to update profile';
-      return false;
+
+      return success;
     } catch (e) {
-      _error = e.toString().replaceAll('Exception: ', '');
+      _errorMessage = e.toString();
       return false;
     } finally {
-      _setLoading(false);
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
-  void _setLoading(bool value) {
-    _isLoading = value;
+  void clearError() {
+    _errorMessage = null;
     notifyListeners();
   }
-
-  void clearError() => _error = null;
 }

@@ -43,13 +43,11 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              'bite.',
-              style: TextStyle(
-                color: AppColors.primaryOrange,
-                fontSize: 48,
-                fontWeight: FontWeight.bold,
-              ),
+            // ✅ Logo Image
+            Image.asset(
+              'assets/logo.png',
+              height: 300, // Adjust size as needed
+              fit: BoxFit.contain,
             ),
             const SizedBox(height: 24),
             const CircularProgressIndicator(

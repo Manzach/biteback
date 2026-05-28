@@ -6,6 +6,10 @@ import 'package:provider/provider.dart';
 // ============================================================================
 import 'config/supabase_config.dart';
 import 'services/auth_service.dart';
+import 'services/profile_service.dart';
+import 'services/order_service.dart';
+import 'services/seller_service.dart';
+import 'services/admin_service.dart'; // ✅ ADD THIS
 
 // ============================================================================
 // PROVIDERS (State Management)
@@ -14,7 +18,10 @@ import 'providers/auth_provider.dart';
 import 'providers/buyer_provider.dart';
 import 'providers/cart_provider.dart';
 import 'providers/donor_provider.dart';
-// import 'providers/seller_provider.dart'; // TODO: Uncomment when seller module is ready
+import 'providers/profile_provider.dart';
+import 'providers/order_provider.dart';
+import 'providers/seller_provider.dart';
+import 'providers/admin_provider.dart'; // ✅ ADD THIS
 // import 'providers/admin_provider.dart';  // TODO: Uncomment when admin module is ready
 
 // ============================================================================
@@ -42,6 +49,16 @@ import 'screens/buyer/listing_detail_screen.dart';
 import 'screens/buyer/order_success_screen.dart';
 import 'screens/buyer/cart_screen.dart';
 import 'screens/buyer/checkout_confirmation_screen.dart';
+import 'screens/buyer/order_history_screen.dart';
+import 'screens/buyer/active_order_screen.dart';
+import 'screens/buyer/profile_screen.dart';
+
+// ============================================================================
+// SELLER SCREENS (UC-05)
+// ============================================================================
+import 'screens/seller/seller_home.dart';
+import 'screens/seller/create_listing_screen.dart';
+import 'screens/seller/order_collection_screen.dart';
 
 // ============================================================================
 // DONOR SCREENS (UC-06)
@@ -50,10 +67,10 @@ import 'screens/donor/donor_home.dart';
 import 'screens/donor/create_donation_screen.dart';
 
 // ============================================================================
-// SELLER/ADMIN SCREENS (Placeholders - Uncomment when ready)
+// ADMIN SCREENS (UC-08)
 // ============================================================================
-// import 'screens/seller/seller_home.dart';
-// import 'screens/admin/admin_home.dart';
+import 'screens/admin/admin_home.dart'; // ✅ ADD THIS
+// import 'screens/admin/admin_home.dart';  // TODO: Uncomment when admin module is ready
 
 // ============================================================================
 // APP ENTRY POINT
@@ -134,11 +151,36 @@ class MyApp extends StatelessWidget {
         // 🛍️ Cart Provider - manages cart items, checkout, multi-location QR
         ChangeNotifierProvider(create: (_) => CartProvider()),
         
+        // 👤 Profile Provider - manages buyer profile updates (UC-02)
+        ChangeNotifierProvider(
+          create: (_) => ProfileProvider(
+            ProfileService(SupabaseConfig.client),
+          ),
+        ),
+        
+        // 📦 Order Provider - manages order history & active order (UC-04)
+        ChangeNotifierProvider(
+          create: (_) => OrderProvider(
+            OrderService(SupabaseConfig.client),
+          ),
+        ),
+        
+        // 🏪 Seller Provider - manages food listings & QR collection (UC-05)
+        ChangeNotifierProvider(
+          create: (_) => SellerProvider(
+            SellerService(),
+          ),
+        ),
+        
         // 🎁 Donor Provider - manages donation advertisements (UC-06)
         ChangeNotifierProvider(create: (_) => DonorProvider()),
         
-        // 🏪 Seller Provider - TODO: Uncomment when seller module is complete
-        // ChangeNotifierProvider(create: (_) => SellerProvider()),
+        // 🛡️ Admin Provider - manages moderation & monitoring (UC-08) ✅ ADD THIS
+        ChangeNotifierProvider(
+          create: (_) => AdminProvider(
+            AdminService(SupabaseConfig.client),
+          ),
+        ),
         
         // ⚙️ Admin Provider - TODO: Uncomment when admin module is complete
         // ChangeNotifierProvider(create: (_) => AdminProvider()),
@@ -183,15 +225,23 @@ class MyApp extends StatelessWidget {
           // ✅ BUYER ROUTES (UC-04: Purchase, UC-07: View Donations)
           '/buyer/home': (context) => const BuyerHome(),
           '/cart': (context) => const CartScreen(),
+          '/buyer/order-history': (context) => const OrderHistoryScreen(),
+          '/buyer/active-order': (context) => const ActiveOrderScreen(),
+          '/buyer/profile': (context) => const ProfileScreen(),
+          
+          // ✅ SELLER ROUTES (UC-05: Manage Food Listing)
+          '/seller/home': (context) => const SellerHome(),
           
           // ✅ DONOR ROUTES (UC-06: Publish Donation)
           '/donor/home': (context) => const DonorHome(),
           
-          // 🔄 SELLER/ADMIN ROUTES - TODO: Uncomment when modules are ready
-          // '/seller/home': (context) => const SellerHome(),
+          // ✅ ADMIN ROUTES (UC-08: Monitor & Moderate) ✅ ADD THIS
+          '/admin/home': (context) => const AdminHome(),
+          
+          // ⚙️ ADMIN ROUTES - TODO: Uncomment when module is complete
           // '/admin/home': (context) => const AdminHome(),
           
-          // ⚠️ Placeholder routes for screens that require constructor data
+          // ️ Placeholder routes for screens that require constructor data
           // These prevent crashes if accidentally navigated via named route
           '/buyer/listing-detail': (context) => const _PlaceholderScreen(
             message: 'Use Navigator.push for listing detail (requires FoodListing)',
@@ -204,6 +254,9 @@ class MyApp extends StatelessWidget {
           ),
           '/donor/create': (context) => const _PlaceholderScreen(
             message: 'Use Navigator.push for create donation (requires form data)',
+          ),
+          '/seller/create-listing': (context) => const _PlaceholderScreen(
+            message: 'Use Navigator.push for create listing (requires form data)',
           ),
         },
         

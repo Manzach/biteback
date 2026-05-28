@@ -1,20 +1,29 @@
+// FILE: lib/core/widgets/role_dashboard.dart
+// ============================================================================
+// ROLE DASHBOARD WIDGET
+// ============================================================================
+// Displays role-specific dashboard content based on user.userRole
+// Aligns with FYP Report: Figure 27 (Role Router), Section 3.4.1b
+// ============================================================================
+
 import 'package:flutter/material.dart';
-import '../../screens/seller/seller_home.dart';
 import '../../screens/buyer/buyer_home.dart';
+import '../../screens/seller/seller_home.dart';
 import '../../screens/donor/donor_home.dart';
-import '../../screens/seller/create_listing_screen.dart';
+import '../../screens/admin/admin_home.dart';
 import 'dashboard_section.dart';
-import 'package:provider/provider.dart'; // ✅ Add this if not already present
-import '../../providers/buyer_provider.dart'; // ✅ Add this
 
 class RoleDashboard extends StatelessWidget {
-  final String userRole;
+  // ✅ Make userRole nullable to handle null/unknown roles safely
+  final String? userRole;
 
-  const RoleDashboard({super.key, required this.userRole});
+  const RoleDashboard({super.key, this.userRole});
 
   @override
   Widget build(BuildContext context) {
-    final config = _getRoleConfig(userRole, context);
+    // ✅ Handle null role gracefully
+    final role = userRole?.toLowerCase() ?? 'buyer';
+    final config = _getRoleConfig(role, context);
     
     return DashboardSection(
       title: config.title,
@@ -35,38 +44,38 @@ class RoleDashboard extends StatelessWidget {
     VoidCallback? onPressed,
     Color accentColor,
   }) _getRoleConfig(String role, BuildContext context) {
-    return switch (role.toLowerCase()) {
+    return switch (role) {
+      // ✅ BUYER: Browse food + donations
       'buyer' => (
-          title: '🛒 Browse Rescued Food',
-          description: 'Find discounted near-expiry items around campus.',
+          title: '🛒 Browse Rescued Food & Donations',
+          description: 'Find discounted & free near-expiry food around campus.',
           icon: Icons.restaurant_menu_outlined,
           buttonText: 'Explore Items',
           onPressed: () {
             Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (context) => const BuyerHome(),
-              ),
+              MaterialPageRoute(builder: (context) => const BuyerHome()),
             );
           },
           accentColor: Colors.orange,
         ),
+
+      // ✅ SELLER: Manage listings
       'seller' => (
           title: '🏪 Manage Listings',
           description: 'Post surplus food & track your sales.',
           icon: Icons.storefront_outlined,
           buttonText: 'View My Listings',
           onPressed: () {
-            // Navigate to Seller Home
             Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (context) => const SellerHome(),
-              ),
+              MaterialPageRoute(builder: (context) => const SellerHome()),
             );
           },
           accentColor: Colors.green,
         ),
+
+      // ✅ DONOR: Post donations
       'donor' => (
           title: '🎁 Post Donations',
           description: 'Share food with those in need & track impact.',
@@ -75,27 +84,38 @@ class RoleDashboard extends StatelessWidget {
           onPressed: () {
             Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (context) => const DonorHome(),
-              ),
+              MaterialPageRoute(builder: (context) => const DonorHome()),
             );
           },
           accentColor: Colors.blue,
         ),
+
+      // ✅ ADMIN: Platform controls (FIXED: Was TODO, now navigates!)
       'admin' => (
-          title: '⚙️ Platform Controls',
+          title: '🛡️ Platform Controls',
           description: 'Moderate content, manage users & view analytics.',
           icon: Icons.admin_panel_settings_outlined,
           buttonText: 'Open Dashboard',
-          onPressed: () {/* TODO: Navigate to admin panel */},
+          onPressed: () {
+            // ✅ ACTUAL NAVIGATION TO ADMIN HOME
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const AdminHome()),
+            );
+          },
           accentColor: Colors.purple,
         ),
+
+      // ✅ DEFAULT: Fallback for unknown/null roles
       _ => (
-          title: 'Welcome!',
+          title: '👋 Welcome!',
           description: 'Select your role in settings to get started.',
           icon: Icons.info_outline,
           buttonText: 'Update Profile',
-          onPressed: () {/* TODO: Navigate to profile edit */},
+          onPressed: () {
+            // Optional: Navigate to profile edit if implemented
+            // Navigator.pushNamed(context, '/profile/edit');
+          },
           accentColor: Colors.grey,
         ),
     };
