@@ -1,9 +1,18 @@
+// FILE: lib/screens/buyer/listing_detail_screen.dart
+// ============================================================================
+// LISTING DETAIL SCREEN - WITH REPORT FUNCTIONALITY
+// ============================================================================
+// Displays food listing details and allows buyers to report inappropriate content
+// Aligns with FYP Report: UC-04 (Purchase Food), UC-08 (Admin Moderation)
+// ============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/food_listing_model.dart';
 import '../../providers/cart_provider.dart';
 import '../../config/app_colors.dart';
 import '../../core/widgets/loading_button.dart';
+import '../../core/widgets/report_issue_dialog.dart'; // ✅ ADD THIS IMPORT
 import 'cart_screen.dart';
 
 class ListingDetailScreen extends StatelessWidget {
@@ -21,6 +30,21 @@ class ListingDetailScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Food Details'),
         actions: [
+          // ✅ ADD THIS: Report Issue Button
+          IconButton(
+            icon: const Icon(Icons.flag_outlined, color: Colors.redAccent),
+            onPressed: () => showDialog(
+              context: context,
+              builder: (_) => ReportIssueDialog(
+                targetType: 'listing', // ✅ Correct type for food listings
+                targetId: listing.id,  // ✅ Pass the listing UUID
+              ),
+            ),
+            tooltip: 'Report this listing',
+          ),
+          const SizedBox(width: 8),
+          
+          // Cart Icon (existing)
           Consumer<CartProvider>(
             builder: (context, cart, _) => Stack(
               children: [
@@ -56,34 +80,72 @@ class ListingDetailScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image
+            // 🖼️ Food Image
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: listing.photoUrl?.isNotEmpty == true
-                  ? Image.network(listing.photoUrl!, fit: BoxFit.cover, width: double.infinity, height: 200)
-                  : Container(height: 200, color: Colors.grey[200], child: const Icon(Icons.restaurant, size: 40, color: Colors.grey)),
+                  ? Image.network(
+                      listing.photoUrl!,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: 200,
+                      errorBuilder: (_, __, ___) => Container(
+                        height: 200,
+                        color: Colors.grey[200],
+                        child: const Icon(Icons.restaurant, size: 40, color: Colors.grey),
+                      ),
+                    )
+                  : Container(
+                      height: 200,
+                      color: Colors.grey[200],
+                      child: const Icon(Icons.restaurant, size: 40, color: Colors.grey),
+                    ),
             ),
             const SizedBox(height: 16),
             
-            // Name & Price
-            Text(listing.foodName, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+            // 📝 Food Name & Price
+            Text(
+              listing.foodName,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(height: 8),
-            Row(children: [
-              Text('RM${listing.discountedPrice.toStringAsFixed(2)}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.primaryOrange)),
-              const SizedBox(width: 8),
-              Text('RM${listing.originalPrice.toStringAsFixed(2)}', style: TextStyle(decoration: TextDecoration.lineThrough, color: Colors.grey[600], fontSize: 16)),
-            ]),
+            Row(
+              children: [
+                Text(
+                  'RM${listing.discountedPrice.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primaryOrange,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'RM${listing.originalPrice.toStringAsFixed(2)}',
+                  style: TextStyle(
+                    decoration: TextDecoration.lineThrough,
+                    color: Colors.grey[600],
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 16),
             
-            // Description & Details
+            // 📋 Description & Details
             const Text('Description', style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
             Text(listing.description, style: const TextStyle(color: Colors.black87)),
             const SizedBox(height: 12),
             Text('📍 ${listing.location}', style: const TextStyle(color: Colors.grey)),
-            Text('⏰ Expires: ${listing.expiryDate.day}/${listing.expiryDate.month}/${listing.expiryDate.year}', style: const TextStyle(color: Colors.grey)),
+            Text(
+              '⏰ Expires: ${listing.expiryDate.day}/${listing.expiryDate.month}/${listing.expiryDate.year}',
+              style: const TextStyle(color: Colors.grey),
+            ),
             
-            // ✅ STOCK STATUS (shows remaining quantity)
+            // ✅ STOCK STATUS
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -95,8 +157,11 @@ class ListingDetailScreen extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(isAtLimit ? Icons.error_outline : Icons.check_circle_outline, 
-                      size: 16, color: isAtLimit ? Colors.red : Colors.green),
+                  Icon(
+                    isAtLimit ? Icons.error_outline : Icons.check_circle_outline,
+                    size: 16,
+                    color: isAtLimit ? Colors.red : Colors.green,
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     isAtLimit ? 'Sold out' : '$remaining left in stock',
@@ -112,7 +177,7 @@ class ListingDetailScreen extends StatelessWidget {
             
             const SizedBox(height: 32),
             
-            // ✅ ADD TO CART BUTTON (with stock limit check)
+            // ✅ ADD TO CART BUTTON
             LoadingButton(
               text: isAtLimit ? 'Sold Out' : 'Add to Cart',
               isLoading: false,

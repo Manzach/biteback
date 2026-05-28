@@ -24,7 +24,7 @@ class _AdminUserManagementState extends State<AdminUserManagement> {
   @override
   void initState() {
     super.initState();
-    // Load users when screen opens
+    // ✅ Load users when screen opens using AdminProvider
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AdminProvider>().loadUsers();
     });
@@ -73,125 +73,166 @@ class _AdminUserManagementState extends State<AdminUserManagement> {
                   ),
                 )
               : users.isEmpty
-                  ? const Center(child: Text('No users found', style: TextStyle(color: Colors.grey)))
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: users.length,
-                      itemBuilder: (context, index) {
-                        final user = users[index];
-                        final isActive = user.accountStatus == 'active';
-                        
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          elevation: 1,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.all(16),
-                            leading: CircleAvatar(
-                              backgroundColor: AppColors.primaryOrange,
-                              child: Text(
-                                (user.fullName ?? 'U')[0].toUpperCase(),
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            title: Text(
-                              user.fullName ?? 'Unknown User',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(user.email, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    // Role Badge
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: _getRoleColor(user.userRole).withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        user.userRole.toUpperCase(),
-                                        style: TextStyle(
-                                          color: _getRoleColor(user.userRole),
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    // Status Badge
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: isActive ? AppColors.secondaryGreen.withOpacity(0.1) : Colors.red.withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        isActive ? 'Active' : 'Inactive',
-                                        style: TextStyle(
-                                          color: isActive ? AppColors.secondaryGreen : Colors.red,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                  ? const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.people_outline, size: 48, color: Colors.grey),
+                          SizedBox(height: 16),
+                          Text('No users found', style: TextStyle(color: Colors.grey, fontSize: 16)),
+                          SizedBox(height: 8),
+                          Text('Pull down to refresh or check database connection', 
+                              style: TextStyle(color: Colors.grey, fontSize: 12)),
+                        ],
+                      ),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: () => adminProvider.loadUsers(),
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: users.length,
+                        itemBuilder: (context, index) {
+                          // ✅ FIX #1: Bounds checking to prevent RangeError
+                          if (index >= users.length) {
+                            debugPrint('⚠️ [UserManagement] Index out of bounds: $index >= ${users.length}');
+                            return const SizedBox.shrink();
+                          }
+                          
+                          final user = users[index];
+                          
+                          // ✅ FIX #2: Safe null handling - ensure all variables are NON-NULL Strings
+                          final userRole = user.userRole?.toLowerCase() ?? 'buyer';
+                          final isActive = (user.accountStatus?.toLowerCase() ?? 'active') == 'active';
+                          
+                          // ✅ FIX: Ensure fullName is ALWAYS a non-null String
+                          final String fullName;
+                          if (user.fullName?.trim().isNotEmpty == true) {
+                            fullName = user.fullName!.trim();  // ✅ Safe: we checked isNotEmpty first
+                          } else {
+                            fullName = 'Unknown User';
+                          }
+                          
+                          final email = user.email?.trim() ?? '';
+                          
+                          debugPrint('✅ [UserManagement] Rendering user $index: $fullName ($userRole)');
+                          
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            elevation: 1,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.all(16),
+                              leading: CircleAvatar(
+                                backgroundColor: AppColors.primaryOrange,
+                                child: Text(
+                                  // ✅ Now safe: fullName is guaranteed non-null String
+                                  fullName.isNotEmpty ? fullName[0].toUpperCase() : 'U',
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                                 ),
-                              ],
-                            ),
-                            trailing: PopupMenuButton<String>(
-                              onSelected: (value) {
-                                if (value == 'toggle') {
-                                  // Toggle status
-                                  final newStatus = isActive ? 'inactive' : 'active';
-                                  _showConfirmationDialog(context, user, newStatus, adminProvider);
-                                } else if (value == 'delete') {
-                                  _showDeleteDialog(context, user, adminProvider);
-                                }
-                              },
-                              itemBuilder: (context) => [
-                                PopupMenuItem(
-                                  value: 'toggle',
-                                  child: Row(
+                              ),
+                              title: Text(
+                                fullName,  // ✅ Non-null String - safe for Text widget
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // ✅ Safe email display
+                                  if (email.isNotEmpty)
+                                    Text(email, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                                  const SizedBox(height: 4),
+                                  Row(
                                     children: [
-                                      Icon(
-                                        isActive ? Icons.block : Icons.check_circle,
-                                        color: isActive ? Colors.red : AppColors.secondaryGreen,
-                                        size: 20,
+                                      // Role Badge
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: _getRoleColor(userRole).withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          userRole.toUpperCase(),  // ✅ userRole is non-null
+                                          style: TextStyle(
+                                            color: _getRoleColor(userRole),  // ✅ Pass non-null to helper
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
                                       ),
                                       const SizedBox(width: 8),
-                                      Text(isActive ? 'Deactivate' : 'Activate'),
+                                      // Status Badge
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: isActive 
+                                              ? AppColors.secondaryGreen.withOpacity(0.1) 
+                                              : Colors.red.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          isActive ? 'Active' : 'Inactive',
+                                          style: TextStyle(
+                                            color: isActive ? AppColors.secondaryGreen : Colors.red,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
                                     ],
                                   ),
-                                ),
-                                const PopupMenuItem(
-                                  value: 'delete',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.delete, color: Colors.red, size: 20),
-                                      SizedBox(width: 8),
-                                      Text('Delete Account'),
-                                    ],
+                                ],
+                              ),
+                              trailing: PopupMenuButton<String>(
+                                onSelected: (value) {
+                                  if (value == 'toggle') {
+                                    final newStatus = isActive ? 'inactive' : 'active';
+                                    _showConfirmationDialog(context, user, newStatus, adminProvider);
+                                  } else if (value == 'delete') {
+                                    _showDeleteDialog(context, user, adminProvider);
+                                  }
+                                },
+                                itemBuilder: (context) => [
+                                  PopupMenuItem(
+                                    value: 'toggle',
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          isActive ? Icons.block : Icons.check_circle,
+                                          color: isActive ? Colors.red : AppColors.secondaryGreen,
+                                          size: 20,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(isActive ? 'Deactivate' : 'Activate'),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              ],
+                                  const PopupMenuItem(
+                                    value: 'delete',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.delete, color: Colors.red, size: 20),
+                                        SizedBox(width: 8),
+                                        Text('Delete Account'),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              tileColor: isActive ? Colors.transparent : Colors.grey[100],
                             ),
-                            tileColor: isActive ? Colors.transparent : Colors.grey[100],
-                          ),
-                        );
-                      },
+                          );
+                        },
+                      ),
                     ),
     );
   }
 
   // ==================================================================
-  // ROLE COLOR HELPER
+  // ROLE COLOR HELPER - Handles nullable input safely
   // ==================================================================
-  Color _getRoleColor(String role) {
-    switch (role.toLowerCase()) {
+  Color _getRoleColor(String? role) {
+    final safeRole = role?.toLowerCase() ?? 'buyer';  // ✅ Ensure non-null
+    switch (safeRole) {
       case 'admin':
         return Colors.purple;
       case 'seller':
@@ -208,6 +249,14 @@ class _AdminUserManagementState extends State<AdminUserManagement> {
   // CONFIRMATION DIALOG FOR TOGGLE STATUS
   // ==================================================================
   void _showConfirmationDialog(BuildContext context, UserModel user, String newStatus, AdminProvider provider) {
+    // ✅ Safe name extraction for dialog
+    final String safeName;
+    if (user.fullName?.trim().isNotEmpty == true) {
+      safeName = user.fullName!.trim();
+    } else {
+      safeName = 'Unknown User';
+    }
+    
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -217,12 +266,14 @@ class _AdminUserManagementState extends State<AdminUserManagement> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Are you sure you want to ${newStatus == 'active' ? 'activate' : 'deactivate'} "${user.fullName}"?'),
+            Text('Are you sure you want to ${newStatus == 'active' ? 'activate' : 'deactivate'} "$safeName"?'),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: newStatus == 'active' ? AppColors.secondaryGreen.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                color: newStatus == 'active' 
+                    ? AppColors.secondaryGreen.withOpacity(0.1) 
+                    : Colors.red.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
@@ -240,17 +291,21 @@ class _AdminUserManagementState extends State<AdminUserManagement> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
-              provider.updateUserStatus(user.id, newStatus);
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('User ${newStatus == 'active' ? 'activated' : 'deactivated'} successfully'),
-                  backgroundColor: AppColors.secondaryGreen,
-                ),
-              );
+            onPressed: () async {
+              final success = await provider.updateUserStatus(user.id, newStatus);
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(success 
+                        ? 'User ${newStatus == 'active' ? 'activated' : 'deactivated'} successfully' 
+                        : 'Failed to update user'),
+                    backgroundColor: success ? AppColors.secondaryGreen : Colors.red,
+                  ),
+                );
+              }
             },
-            child: const Text('Confirm', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            child: const Text('Confirm', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -261,6 +316,14 @@ class _AdminUserManagementState extends State<AdminUserManagement> {
   // DELETE CONFIRMATION DIALOG
   // ==================================================================
   void _showDeleteDialog(BuildContext context, UserModel user, AdminProvider provider) {
+    // ✅ Safe name extraction for dialog
+    final String safeName;
+    if (user.fullName?.trim().isNotEmpty == true) {
+      safeName = user.fullName!.trim();
+    } else {
+      safeName = 'Unknown User';
+    }
+    
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -270,7 +333,7 @@ class _AdminUserManagementState extends State<AdminUserManagement> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Are you sure you want to delete "${user.fullName}"?'),
+            Text('Are you sure you want to delete "$safeName"?'),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
@@ -291,15 +354,17 @@ class _AdminUserManagementState extends State<AdminUserManagement> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
-              provider.deleteUser(user.id);
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('User account deleted'),
-                  backgroundColor: Colors.red,
-                ),
-              );
+            onPressed: () async {
+              final success = await provider.deleteUser(user.id);
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(success ? 'User account deleted' : 'Failed to delete user'),
+                    backgroundColor: success ? Colors.red : Colors.orange,
+                  ),
+                );
+              }
             },
             child: const Text('Delete', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
           ),

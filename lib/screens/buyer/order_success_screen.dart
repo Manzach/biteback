@@ -1,3 +1,12 @@
+// FILE: lib/screens/buyer/order_success_screen.dart
+// ============================================================================
+// ORDER SUCCESS SCREEN - QR CODE GENERATION
+// ============================================================================
+// Displays QR codes for pickup verification after successful order
+// Format: BB-LOC-{safe_location}-{uuid1,uuid2,uuid3}
+// Aligns with FYP Report: UC-04, Figure 38, Table 12
+// ============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../models/order_model.dart';
@@ -44,8 +53,14 @@ class OrderSuccessScreen extends StatelessWidget {
                     (sum, order) => sum + order.quantity,
                   );
                   
-                  // ✅ Generate location-specific QR payload
-                  final qrPayload = 'BB-LOC-${location.replaceAll(' ', '_')}-${orders.map((o) => o.id.substring(0, 8)).join('-')}';
+                  // ✅ FIX: Generate standardized QR payload
+                  // Format: BB-LOC-{safe_location}-{uuid1,uuid2,uuid3}
+                  // - Uses FULL UUIDs (not truncated) for reliable lookup
+                  // - Uses comma ',' separator (not dash) for easy parsing
+                  // - Sanitizes location to alphanumeric + underscore only
+                  final orderIds = orders.map((o) => o.id).join(',');
+                  final safeLocation = location.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
+                  final qrPayload = 'BB-LOC-$safeLocation-$orderIds';
 
                   return Card(
                     margin: const EdgeInsets.only(bottom: 16),
@@ -60,7 +75,7 @@ class OrderSuccessScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           
-                          // 📦 Total Items Text (FIXED: shows actual quantity)
+                          // 📦 Total Items Text
                           Text(
                             '$totalQuantity item${totalQuantity > 1 ? 's' : ''} to collect',
                             style: TextStyle(color: Colors.grey[600], fontSize: 14),
@@ -74,7 +89,7 @@ class OrderSuccessScreen extends StatelessWidget {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
-                                  '• Item #${order.listingId.substring(0, 6)}', // Short ID for display
+                                  '• Item #${order.listingId.substring(0, 6)}',
                                   style: const TextStyle(fontSize: 13),
                                 ),
                                 Text(

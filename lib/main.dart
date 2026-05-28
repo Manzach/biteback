@@ -1,3 +1,11 @@
+// FILE: lib/main.dart
+// ============================================================================
+// APP ENTRY POINT & PROVIDER REGISTRATION
+// ============================================================================
+// Initializes Supabase, auth, and all providers before launching the app
+// Aligns with FYP Report: Figure 26 (System Architecture), Section 4.2
+// ============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -9,7 +17,8 @@ import 'services/auth_service.dart';
 import 'services/profile_service.dart';
 import 'services/order_service.dart';
 import 'services/seller_service.dart';
-import 'services/admin_service.dart'; // ✅ ADD THIS
+import 'services/admin_service.dart';
+import 'services/report_service.dart'; // ✅ ADD THIS: For issue reporting (UC-08)
 
 // ============================================================================
 // PROVIDERS (State Management)
@@ -21,8 +30,8 @@ import 'providers/donor_provider.dart';
 import 'providers/profile_provider.dart';
 import 'providers/order_provider.dart';
 import 'providers/seller_provider.dart';
-import 'providers/admin_provider.dart'; // ✅ ADD THIS
-// import 'providers/admin_provider.dart';  // TODO: Uncomment when admin module is ready
+import 'providers/admin_provider.dart';
+import 'providers/report_provider.dart'; // ✅ ADD THIS: For issue reporting (UC-08)
 
 // ============================================================================
 // DESIGN SYSTEM
@@ -69,14 +78,12 @@ import 'screens/donor/create_donation_screen.dart';
 // ============================================================================
 // ADMIN SCREENS (UC-08)
 // ============================================================================
-import 'screens/admin/admin_home.dart'; // ✅ ADD THIS
-// import 'screens/admin/admin_home.dart';  // TODO: Uncomment when admin module is ready
+import 'screens/admin/admin_home.dart';
+import 'screens/admin/admin_issue_management.dart'; // ✅ ADD THIS
 
 // ============================================================================
 // APP ENTRY POINT
 // ============================================================================
-/// Initializes Supabase, auth, and providers before launching the app
-/// Aligns with FYP Report: Figure 26 (System Architecture), Section 4.2
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -131,8 +138,6 @@ Future<void> main() async {
 // ============================================================================
 // ROOT WIDGET
 // ============================================================================
-/// Configures MultiProvider, MaterialApp theme, and routing
-/// Uses RoleRouter logic (via HomeScreen) for role-based navigation
 class MyApp extends StatelessWidget {
   final AuthProvider authProvider;
   
@@ -175,15 +180,19 @@ class MyApp extends StatelessWidget {
         // 🎁 Donor Provider - manages donation advertisements (UC-06)
         ChangeNotifierProvider(create: (_) => DonorProvider()),
         
-        // 🛡️ Admin Provider - manages moderation & monitoring (UC-08) ✅ ADD THIS
+        // 🛡️ Admin Provider - manages moderation & monitoring (UC-08)
         ChangeNotifierProvider(
           create: (_) => AdminProvider(
             AdminService(SupabaseConfig.client),
           ),
         ),
         
-        // ⚙️ Admin Provider - TODO: Uncomment when admin module is complete
-        // ChangeNotifierProvider(create: (_) => AdminProvider()),
+        // 🚩 Report Provider - manages issue reporting & moderation (UC-08) ✅ ADD THIS
+        ChangeNotifierProvider(
+          create: (_) => ReportProvider(
+            ReportService(SupabaseConfig.client),
+          ),
+        ),
       ],
       child: MaterialApp(
         title: 'BiteBack',
@@ -235,14 +244,11 @@ class MyApp extends StatelessWidget {
           // ✅ DONOR ROUTES (UC-06: Publish Donation)
           '/donor/home': (context) => const DonorHome(),
           
-          // ✅ ADMIN ROUTES (UC-08: Monitor & Moderate) ✅ ADD THIS
+          // ✅ ADMIN ROUTES (UC-08: Monitor & Moderate)
           '/admin/home': (context) => const AdminHome(),
-          
-          // ⚙️ ADMIN ROUTES - TODO: Uncomment when module is complete
-          // '/admin/home': (context) => const AdminHome(),
+          '/admin/issues': (context) => const AdminIssueManagement(), // ✅ ADD THIS
           
           // ️ Placeholder routes for screens that require constructor data
-          // These prevent crashes if accidentally navigated via named route
           '/buyer/listing-detail': (context) => const _PlaceholderScreen(
             message: 'Use Navigator.push for listing detail (requires FoodListing)',
           ),
@@ -260,7 +266,7 @@ class MyApp extends StatelessWidget {
           ),
         },
         
-        // 🚫 Handle unknown routes gracefully (prevents white screen crashes)
+        // 🚫 Handle unknown routes gracefully
         onUnknownRoute: (settings) => MaterialPageRoute(
           builder: (context) => Scaffold(
             appBar: AppBar(title: const Text('Error')),
@@ -296,9 +302,6 @@ class MyApp extends StatelessWidget {
 // ============================================================================
 // HELPER: Placeholder Screen for Data-Dependent Routes
 // ============================================================================
-/// Displays a friendly message when a route requiring constructor data
-/// is accidentally accessed via named navigation.
-/// Prevents runtime crashes during development.
 class _PlaceholderScreen extends StatelessWidget {
   final String message;
   const _PlaceholderScreen({required this.message});

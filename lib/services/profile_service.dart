@@ -21,78 +21,106 @@ class ProfileService {
   // ==================================================================
   // FETCH CURRENT USER'S PROFILE
   // ==================================================================
-  /// Retrieves the profile data for the currently authenticated user
-  /// Returns null if user is not logged in or profile doesn't exist
-  /// Uses maybeSingle() to avoid crashes on missing rows
-  // ==================================================================
   Future<ProfileModel?> getCurrentProfile() async {
     final user = _client.auth.currentUser;
     if (user == null) return null;
 
     try {
+      debugPrint('🔍 [ProfileService] Fetching profile for user: ${user.id}');
+      
       final data = await _client
           .from('profiles')
           .select()
           .eq('id', user.id)
-          .maybeSingle(); // Safe: returns null if no row
+          .maybeSingle();
 
+      debugPrint('📦 [ProfileService] Profile fetch result: ${data != null ? "Found" : "Null"}');
+      
       return data != null ? ProfileModel.fromMap(data) : null;
     } catch (e) {
-      debugPrint('❌ ProfileService.getCurrentProfile error: $e');
+      debugPrint('❌ [ProfileService] getCurrentProfile error: $e');
       return null;
     }
   }
 
-// ==================================================================
-// UPDATE CURRENT USER'S PROFILE (SECURE)
-// ==================================================================
-Future<bool> updateProfile({
-  required String userId, // ✅ ADD THIS parameter
-  String? fullName,
-  String? phoneNumber,
-}) async {
-  try {
-    final updates = <String, dynamic>{};
-    
-    if (fullName != null && fullName.trim().isNotEmpty) {
-      updates['full_name'] = fullName.trim();
+  // ==================================================================
+  // ✅ UPDATE CURRENT USER'S PROFILE (With Debug Logging + .select())
+  // ==================================================================
+  Future<bool> updateProfile({
+    required String userId,
+    String? fullName,
+    String? phoneNumber,
+  }) async {
+    try {
+      debugPrint('🔄 [ProfileService] Starting profile update for user: $userId');
+      
+      final updates = <String, dynamic>{};
+      
+      if (fullName != null && fullName.trim().isNotEmpty) {
+        updates['full_name'] = fullName.trim();
+        debugPrint('📝 [ProfileService] Adding full_name update: "${fullName.trim()}"');
+      }
+      if (phoneNumber != null && phoneNumber.trim().isNotEmpty) {
+        updates['phone_number'] = phoneNumber.trim();
+        debugPrint('📝 [ProfileService] Adding phone_number update: "${phoneNumber.trim()}"');
+      }
+
+      if (updates.isEmpty) {
+        debugPrint('⚠️ [ProfileService] No updates to apply');
+        return true;
+      }
+
+      // ✅ ADD THIS DEBUG BLOCK: Check auth.uid() vs userId parameter
+      final currentUser = _client.auth.currentUser;
+      debugPrint('🔍 DEBUG: auth.uid() = ${currentUser?.id}');
+      debugPrint('🔍 DEBUG: userId param = $userId');
+      debugPrint('🔍 DEBUG: Do they match? ${currentUser?.id == userId}');
+      debugPrint('🔍 DEBUG: currentUser email = ${currentUser?.email}');
+      
+      debugPrint('📤 [ProfileService] Sending update to Supabase: $updates');
+      
+      // ✅ ADD .select() to verify the update succeeded
+      final response = await _client
+          .from('profiles')
+          .update(updates)
+          .eq('id', userId)
+          .select(); // ✅ Return updated row to verify
+
+      debugPrint('📦 [ProfileService] Update response: $response');
+      
+      if (response.isNotEmpty) {
+        debugPrint('✅ [ProfileService] Profile updated successfully');
+        return true;
+      } else {
+        debugPrint('❌ [ProfileService] No rows updated - check RLS policy or userId');
+        return false;
+      }
+      
+    } catch (e, stack) {
+      debugPrint('❌ [ProfileService] updateProfile error: $e');
+      debugPrint('📋 [ProfileService] Stack trace: $stack');
+      return false;
     }
-    if (phoneNumber != null && phoneNumber.trim().isNotEmpty) {
-      updates['phone_number'] = phoneNumber.trim();
-    }
-
-    if (updates.isEmpty) return true;
-
-    await _client
-        .from('profiles')
-        .update(updates)
-        .eq('id', userId); // ✅ Use passed userId instead of auth.currentUser?.id
-
-    return true;
-  } catch (e) {
-    debugPrint('❌ ProfileService.updateProfile error: $e');
-    return false;
   }
-}
 
   // ==================================================================
   // FETCH PROFILE BY USER ID (For marketplace, admin, etc.)
   // ==================================================================
-  /// Retrieves profile data for a specific user ID
-  /// Useful for displaying seller/donor info in listings
-  /// Returns null if profile doesn't exist or fetch fails
-  // ==================================================================
   Future<ProfileModel?> getProfileById(String userId) async {
     try {
+      debugPrint('🔍 [ProfileService] Fetching profile by ID: $userId');
+      
       final data = await _client
           .from('profiles')
           .select()
           .eq('id', userId)
           .maybeSingle();
 
+      debugPrint('📦 [ProfileService] getProfileById result: ${data != null ? "Found" : "Null"}');
+      
       return data != null ? ProfileModel.fromMap(data) : null;
     } catch (e) {
-      debugPrint('❌ ProfileService.getProfileById error: $e');
+      debugPrint('❌ [ProfileService] getProfileById error: $e');
       return null;
     }
   }
@@ -100,41 +128,36 @@ Future<bool> updateProfile({
   // ==================================================================
   // [ADMIN-ONLY] Update user role (Separate method for security)
   // ==================================================================
-  /// Updates a user's role - RESTRICTED TO ADMIN USE ONLY
-  /// 
-  /// ⚠️ This method should ONLY be called from AdminService/AdminProvider
-  /// It includes an additional check to ensure caller has admin privileges
-  /// 
-  /// Parameters:
-  ///   - targetUserId: The user whose role will be changed
-  ///   - newRole: New role value ('buyer', 'seller', 'donor', 'admin')
-  ///   - adminUserId: The ID of the admin performing the action (for audit)
-  // ==================================================================
   Future<bool> updateUserRole({
     required String targetUserId,
     required String newRole,
-    required String adminUserId, // For audit/logging
+    required String adminUserId,
   }) async {
-    // ✅ Validate role value against allowed options
     const validRoles = ['buyer', 'seller', 'donor', 'admin'];
     if (!validRoles.contains(newRole)) {
-      debugPrint('❌ Invalid role: $newRole');
+      debugPrint('❌ [ProfileService] Invalid role: $newRole');
       return false;
     }
 
     try {
-      // ✅ Optional: Verify adminUserId has admin role (add your logic here)
-      // final adminProfile = await getProfileById(adminUserId);
-      // if (adminProfile?.role != 'admin') return false;
-
-      await _client
+      debugPrint('🔄 [ProfileService] Admin $adminUserId updating role for $targetUserId to $newRole');
+      
+      final response = await _client
           .from('profiles')
           .update({'role': newRole})
-          .eq('id', targetUserId);
-
-      return true;
+          .eq('id', targetUserId)
+          .select();
+      
+      debugPrint('📦 [ProfileService] Role update response: $response');
+      
+      if (response.isNotEmpty) {
+        debugPrint('✅ [ProfileService] Role updated successfully');
+        return true;
+      }
+      return false;
+      
     } catch (e) {
-      debugPrint('❌ ProfileService.updateUserRole error: $e');
+      debugPrint('❌ [ProfileService] updateUserRole error: $e');
       return false;
     }
   }

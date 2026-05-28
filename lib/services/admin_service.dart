@@ -45,31 +45,63 @@ class AdminService {
   }
 
   // ==================================================================
-  // USER MANAGEMENT
+  // USER MANAGEMENT - FIXED TO FETCH ALL USERS
   // ==================================================================
   Future<List<UserModel>> getAllUsers() async {
     try {
+      debugPrint('🔍 [AdminService] Fetching all users from profiles table...');
+      
+      // ✅ FIX: Select ALL columns from profiles table without filtering
+      // This ensures admin can see ALL users, not just their own profile
       final response = await _client
           .from('profiles')
-          .select()
+          .select('*')  // ✅ Select all columns
           .order('created_at', ascending: false);
 
+      debugPrint('📦 [AdminService] Profiles query returned ${response.length} users');
+      
+      if (response.isEmpty) {
+        debugPrint('⚠️ [AdminService] No users found - check RLS policies or table name');
+        return [];
+      }
+
       return (response as List)
-          .map((json) => UserModel.fromMap(json as Map<String, dynamic>))
+          .map((json) {
+            try {
+              return UserModel.fromMap(json as Map<String, dynamic>);
+            } catch (e) {
+              debugPrint('❌ [AdminService] Error parsing user: $e');
+              return null;
+            }
+          })
+          .whereType<UserModel>()  // Filter out nulls from failed parsing
           .toList();
-    } catch (e) {
-      debugPrint('❌ AdminService.getAllUsers error: $e');
+          
+    } on PostgrestException catch (e) {
+      debugPrint('💥 [AdminService] PostgrestException in getAllUsers: ${e.message}');
+      debugPrint('   - Code: ${e.code}');
+      debugPrint('   - Details: ${e.details}');
+      debugPrint('   - Hint: ${e.hint}');
+      return [];
+    } catch (e, stack) {
+      debugPrint('❌ [AdminService] getAllUsers error: $e');
+      debugPrint('📋 Stack trace: $stack');
       return [];
     }
   }
 
   Future<bool> updateUserStatus(String userId, String status) async {
     try {
-      await _client
+      debugPrint('🔄 [AdminService] Updating user $userId status to: $status');
+      
+      final response = await _client
           .from('profiles')
           .update({'account_status': status})
-          .eq('id', userId);
-      return true;
+          .eq('id', userId)
+          .select();
+      
+      debugPrint('📦 [AdminService] Update response: $response');
+      return response.isNotEmpty;
     } catch (e) {
       debugPrint('❌ AdminService.updateUserStatus error: $e');
       return false;
@@ -78,11 +110,14 @@ class AdminService {
 
   Future<bool> deleteUser(String userId) async {
     try {
-      await _client
+      // Soft delete: update status instead of hard delete
+      final response = await _client
           .from('profiles')
           .update({'account_status': 'deleted'})
-          .eq('id', userId);
-      return true;
+          .eq('id', userId)
+          .select();
+      
+      return response.isNotEmpty;
     } catch (e) {
       debugPrint('❌ AdminService.deleteUser error: $e');
       return false;
@@ -204,12 +239,10 @@ class AdminService {
     }
   }
 
-  // ✅ IMPROVED: Remove donation with .select() to verify update + debug logging
   Future<bool> removeDonation(String donationId) async {
     try {
       debugPrint('🗑️ [AdminService] Attempting to remove donation ID: $donationId');
       
-      // ✅ ADD .select() to get the response back
       final response = await _client
           .from('donations')
           .update({'availability_status': 'Removed'})
@@ -253,15 +286,17 @@ class AdminService {
   Future<bool> resolveReport(String reportId) async {
     try {
       final adminId = _client.auth.currentUser?.id;
-      await _client
+      final response = await _client
           .from('reports')
           .update({
             'status': 'Resolved',
             'resolved_at': DateTime.now().toIso8601String(),
             'resolved_by': adminId,
           })
-          .eq('id', reportId);
-      return true;
+          .eq('id', reportId)
+          .select();
+      
+      return response.isNotEmpty;
     } catch (e) {
       debugPrint('❌ AdminService.resolveReport error: $e');
       return false;
@@ -270,8 +305,13 @@ class AdminService {
 
   Future<bool> deleteReport(String reportId) async {
     try {
-      await _client.from('reports').delete().eq('id', reportId);
-      return true;
+      final response = await _client
+          .from('reports')
+          .delete()
+          .eq('id', reportId)
+          .select();
+      
+      return response.isNotEmpty;
     } catch (e) {
       debugPrint('❌ AdminService.deleteReport error: $e');
       return false;

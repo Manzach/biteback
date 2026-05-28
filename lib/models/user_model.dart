@@ -12,7 +12,7 @@ class UserModel {
   final String? fullName;
   final String? phoneNumber;
   final String userRole;
-  final String accountStatus; // ✅ ADD THIS FIELD
+  final String accountStatus; // ✅ Added: Track active/inactive/deleted status
 
   UserModel({
     required this.id,
@@ -20,47 +20,61 @@ class UserModel {
     this.fullName,
     this.phoneNumber,
     this.userRole = 'buyer',
-    this.accountStatus = 'active', // ✅ ADD DEFAULT VALUE
+    this.accountStatus = 'active', // ✅ Default to active
   });
 
   // ==================================================================
-  // ✅ ADD THIS: Getter for backward compatibility
+  // ✅ GETTER: Backward compatibility for 'role' access
   // ==================================================================
   /// Returns the user's role ('buyer', 'seller', 'donor', 'admin')
   /// Used by AuthProvider and UI for role-based access checks
-  // ==================================================================
   String get role => userRole;
 
   // ==================================================================
-  // Parse Supabase JSON response (uses fromMap naming convention)
+  // ✅ FACTORY: Parse Supabase JSON response (snake_case columns)
   // ==================================================================
   factory UserModel.fromMap(Map<String, dynamic> map) {
     return UserModel(
-      id: map['id'] as String? ?? '',
+      // ID: From Supabase auth or profiles table
+      id: map['id'] as String? ?? map['user_id'] as String? ?? '',
+      
+      // Email: Handle both 'email' and 'user_email' column names
       email: map['email'] as String? ?? map['user_email'] as String? ?? '',
-      fullName: map['full_name'] as String?,
-      phoneNumber: map['phone_number'] as String?,
-      userRole: map['role'] as String? ?? 'buyer',
-      accountStatus: map['account_status'] as String? ?? 'active',
+      
+      // Full Name: Supabase uses snake_case 'full_name'
+      fullName: map['full_name'] as String? ?? map['fullName'] as String?,
+      
+      // Phone: Supabase uses snake_case 'phone_number'
+      phoneNumber: map['phone_number'] as String? ?? map['phoneNumber'] as String?,
+      
+      // Role: Handle both 'role' and 'user_role' column names
+      userRole: map['role'] as String? ?? 
+                map['user_role'] as String? ?? 
+                'buyer',
+      
+      // Account Status: Handle both naming conventions
+      accountStatus: map['account_status'] as String? ?? 
+                     map['status'] as String? ?? 
+                     'active',
     );
   }
 
   // ==================================================================
-  // Convert to Map for Supabase operations
+  // ✅ METHOD: Convert to Map for Supabase operations (snake_case)
   // ==================================================================
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'email': email,
-      'full_name': fullName,
-      'phone_number': phoneNumber,
-      'role': userRole,
-      'account_status': accountStatus, // ✅ STORE TO DB
+      'full_name': fullName,              // ✅ Supabase snake_case
+      'phone_number': phoneNumber,         // ✅ Supabase snake_case
+      'role': userRole,                    // ✅ Or 'user_role' if needed
+      'account_status': accountStatus,     // ✅ Supabase snake_case
     };
   }
 
   // ==================================================================
-  // Immutable copy method for state updates
+  // ✅ METHOD: Immutable copy for state updates
   // ==================================================================
   UserModel copyWith({
     String? id,
@@ -68,7 +82,7 @@ class UserModel {
     String? fullName,
     String? phoneNumber,
     String? userRole,
-    String? accountStatus, // ✅ ADD TO COPYWITH
+    String? accountStatus,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -76,12 +90,12 @@ class UserModel {
       fullName: fullName ?? this.fullName,
       phoneNumber: phoneNumber ?? this.phoneNumber,
       userRole: userRole ?? this.userRole,
-      accountStatus: accountStatus ?? this.accountStatus, // ✅ ADD HERE
+      accountStatus: accountStatus ?? this.accountStatus,
     );
   }
 
   // ==================================================================
-  // ✅ ADD THIS: Helper getters for role checks (cleaner UI code)
+  // ✅ HELPERS: Role checks for cleaner UI code
   // ==================================================================
   bool get isAdmin => userRole.toLowerCase() == 'admin';
   bool get isSeller => userRole.toLowerCase() == 'seller';
@@ -89,9 +103,30 @@ class UserModel {
   bool get isBuyer => userRole.toLowerCase() == 'buyer';
 
   // ==================================================================
-  // ✅ ADD THIS: Helper getters for account status checks
+  // ✅ HELPERS: Account status checks for UI logic
   // ==================================================================
   bool get isActive => accountStatus.toLowerCase() == 'active';
   bool get isInactive => accountStatus.toLowerCase() == 'inactive';
   bool get isDeleted => accountStatus.toLowerCase() == 'deleted';
+  bool get isSuspended => accountStatus.toLowerCase() == 'suspended';
+
+  // ==================================================================
+  // ✅ DEBUG: toString() for console logging
+  // ==================================================================
+  @override
+  String toString() {
+    return 'UserModel(id: $id, email: $email, role: $userRole, status: $accountStatus)';
+  }
+
+  // ==================================================================
+  // ✅ EQUALS: For list comparisons and testing
+  // ==================================================================
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is UserModel && other.id == id;
+  }
+
+  @override
+  int get hashCode => id.hashCode;
 }

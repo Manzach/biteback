@@ -3,7 +3,7 @@
 // ORDER COLLECTION SCREEN (SELLER QR SCANNER)
 // ============================================================================
 // Allows sellers to scan buyer QR codes to verify pickup
-// - Parses QR payload: BB-LOC-{location}_{order1,order2}
+// - Parses QR payload: BB-LOC-{safe_location}-{uuid1,uuid2,uuid3}
 // - Displays order details for confirmation
 // - Updates order status to 'collected' + deducts listing quantity
 // Aligns with FYP Report: UC-04, Figure 38, Table 12
@@ -128,7 +128,7 @@ class _OrderCollectionScreenState extends State<OrderCollectionScreen> {
   }
 
   // ==================================================================
-  // PROCESS SCANNED QR CODE
+  // ✅ PROCESS SCANNED QR CODE (FIXED PARSING LOGIC)
   // ==================================================================
   Future<void> _processQR(BuildContext context, String qrPayload) async {
     setState(() {
@@ -140,18 +140,53 @@ class _OrderCollectionScreenState extends State<OrderCollectionScreen> {
     await _controller.stop();
 
     try {
-      // ✅ Parse payload: BB-LOC-{location}_{orderId1,orderId2}
-      final parts = qrPayload.split('_');
-      if (parts.length < 3 || !qrPayload.startsWith('BB-LOC-')) {
-        throw Exception('Invalid QR format');
+      // ✅ Parse format: BB-LOC-{safe_location}-{uuid1,uuid2,uuid3}
+      // Example: BB-LOC-Mahallah_As_Siddiq-4c8b5734-ac84-4400-9b91-cb4f35698a7e,b602574f-8ec6-40d2-bca9-4a42214c1098
+      
+      // 1. Validate prefix
+      if (!qrPayload.startsWith('BB-LOC-')) {
+        throw Exception('Invalid QR format: missing BB-LOC- prefix');
       }
       
-      // Extract order IDs (last part, comma-separated)
-      final orderIds = parts.last.split(',').where((id) => id.trim().isNotEmpty).toList();
-      if (orderIds.isEmpty) throw Exception('No order IDs found in QR');
+      // 2. Remove prefix
+      final withoutPrefix = qrPayload.substring(7); // Remove 'BB-LOC-'
+      
+      // 3. Find the LAST dash to separate location from order IDs
+      // (Location may contain underscores, but order IDs are UUIDs with dashes)
+      final lastDashIndex = withoutPrefix.lastIndexOf('-');
+      
+      if (lastDashIndex == -1 || lastDashIndex == withoutPrefix.length - 1) {
+        throw Exception('Invalid QR structure: cannot separate location from order IDs');
+      }
+      
+      // 4. Extract location (replace underscores back to spaces for display)
+      final location = withoutPrefix.substring(0, lastDashIndex).replaceAll('_', ' ');
+      
+      // 5. Extract order IDs (comma-separated full UUIDs)
+      final orderIdsRaw = withoutPrefix.substring(lastDashIndex + 1);
+      final orderIds = orderIdsRaw.split(',')
+          .map((id) => id.trim())
+          .where((id) => id.isNotEmpty)
+          .toList();
+      
+      if (orderIds.isEmpty) {
+        throw Exception('No valid order IDs found in QR code');
+      }
+      
+      // ✅ Validate UUID format (optional but helpful for debugging)
+      final uuidRegex = RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', caseSensitive: false);
+      final invalidIds = orderIds.where((id) => !uuidRegex.hasMatch(id)).toList();
+      if (invalidIds.isNotEmpty) {
+        debugPrint('⚠️ [OrderCollection] Warning: Invalid UUID format in: $invalidIds');
+        // Continue anyway - Supabase will reject invalid IDs
+      }
+
+      debugPrint('🔍 [OrderCollection] Parsed QR:');
+      debugPrint('   - Location: $location');
+      debugPrint('   - Order IDs: $orderIds');
 
       // ✅ Show confirmation dialog with order details
-      final confirm = await _showConfirmationDialog(context, orderIds);
+      final confirm = await _showConfirmationDialog(context, orderIds, location);
       if (!confirm || !mounted) {
         _resumeScanning();
         return;
@@ -171,6 +206,7 @@ class _OrderCollectionScreenState extends State<OrderCollectionScreen> {
       }
       
     } catch (e) {
+      debugPrint('❌ [OrderCollection] QR processing error: $e');
       if (!mounted) return;
       setState(() => _scanError = 'Invalid or expired QR code');
       _resumeScanning();
@@ -189,9 +225,11 @@ class _OrderCollectionScreenState extends State<OrderCollectionScreen> {
   // ==================================================================
   // CONFIRMATION DIALOG (Show Order Details Before Collecting)
   // ==================================================================
-  Future<bool> _showConfirmationDialog(BuildContext context, List<String> orderIds) async {
-    // Fetch order details for display (optional: could skip for speed)
-    // For now, just show count + manual payment reminder
+  Future<bool> _showConfirmationDialog(
+    BuildContext context, 
+    List<String> orderIds,
+    String location,
+  ) async {
     return await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -202,6 +240,8 @@ class _OrderCollectionScreenState extends State<OrderCollectionScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text('📍 Location: $location'),
+            const SizedBox(height: 8),
             Text('This QR contains ${orderIds.length} order(s).'),
             const SizedBox(height: 12),
             Container(

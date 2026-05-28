@@ -1,6 +1,15 @@
+// FILE: lib/screens/donor/donation_detail_screen.dart
+// ============================================================================
+// DONATION DETAIL SCREEN - WITH REPORT FUNCTIONALITY
+// ============================================================================
+// Displays donation details and allows buyers to report inappropriate content
+// Aligns with FYP Report: UC-07 (View Donations), UC-08 (Admin Moderation)
+// ============================================================================
+
 import 'package:flutter/material.dart';
 import '../../models/donation_model.dart';
 import '../../config/app_colors.dart';
+import '../../core/widgets/report_issue_dialog.dart'; // ✅ ADD THIS IMPORT
 
 class DonationDetailScreen extends StatelessWidget {
   final DonationModel donation;
@@ -14,6 +23,20 @@ class DonationDetailScreen extends StatelessWidget {
         backgroundColor: AppColors.primaryOrange,
         title: const Text('Donation Details', style: TextStyle(color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          // ✅ ADD THIS: Report Issue Button
+          IconButton(
+            icon: const Icon(Icons.flag_outlined, color: Colors.white),
+            onPressed: () => showDialog(
+              context: context,
+              builder: (_) => ReportIssueDialog(
+                targetType: 'donation', // ✅ Correct type for donations
+                targetId: donation.id,  // ✅ Pass the donation UUID
+              ),
+            ),
+            tooltip: 'Report this donation',
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),

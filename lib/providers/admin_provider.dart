@@ -47,7 +47,9 @@ class AdminProvider with ChangeNotifier {
     notifyListeners();
 
     try {
+      debugPrint('🔍 [AdminProvider] Loading dashboard stats...');
       _stats = await _service.getDashboardStats();
+      debugPrint('✅ [AdminProvider] Stats loaded: $_stats');
     } catch (e) {
       _error = 'Failed to load dashboard stats';
       debugPrint('❌ AdminProvider.loadDashboard error: $e');
@@ -57,17 +59,45 @@ class AdminProvider with ChangeNotifier {
     }
   }
 
+  // ==================================================================
+  // LOAD USERS - ENHANCED WITH DETAILED LOGGING ✅
+  // ==================================================================
   Future<void> loadUsers() async {
     _isLoading = true;
+    _error = null;
     notifyListeners();
+    
     try {
+      debugPrint('🔍 [AdminProvider] Loading users from database...');
+      
       _users = await _service.getAllUsers();
-    } catch (e) {
-      _error = 'Failed to load users';
-      debugPrint('❌ AdminProvider.loadUsers error: $e');
+      
+      debugPrint('📦 [AdminProvider] Service returned ${_users.length} users');
+      
+      if (_users.isEmpty) {
+        debugPrint('⚠️ [AdminProvider] No users found - check:');
+        debugPrint('   1. RLS policies on profiles table');
+        debugPrint('   2. Database has user records');
+        debugPrint('   3. Admin role in auth.users metadata');
+      } else {
+        // Log first 3 users for debugging
+        for (int i = 0; i < _users.length && i < 3; i++) {
+          final user = _users[i];
+          debugPrint('✅ [AdminProvider] User $i: ${user.fullName} (${user.userRole}) - ${user.accountStatus}');
+        }
+        if (_users.length > 3) {
+          debugPrint('... and ${_users.length - 3} more users');
+        }
+      }
+      
+    } catch (e, stack) {
+      _error = 'Failed to load users: ${e.toString()}';
+      debugPrint('❌ [AdminProvider] loadUsers error: $e');
+      debugPrint('📋 Stack trace: $stack');
     } finally {
       _isLoading = false;
       notifyListeners();
+      debugPrint('🔄 [AdminProvider] Loading state reset, users count: ${_users.length}');
     }
   }
 
@@ -75,7 +105,9 @@ class AdminProvider with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
+      debugPrint('🔍 [AdminProvider] Loading listings...');
       _listings = await _service.getAllListings();
+      debugPrint('✅ [AdminProvider] Loaded ${_listings.length} listings');
     } catch (e) {
       _error = 'Failed to load listings';
       debugPrint('❌ AdminProvider.loadListings error: $e');
@@ -89,7 +121,9 @@ class AdminProvider with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
+      debugPrint('🔍 [AdminProvider] Loading donations...');
       _donations = await _service.getAllDonations();
+      debugPrint('✅ [AdminProvider] Loaded ${_donations.length} donations');
     } catch (e) {
       _error = 'Failed to load donations';
       debugPrint('❌ AdminProvider.loadDonations error: $e');
@@ -103,7 +137,9 @@ class AdminProvider with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
+      debugPrint('🔍 [AdminProvider] Loading reports...');
       _reports = await _service.getAllReports();
+      debugPrint('✅ [AdminProvider] Loaded ${_reports.length} reports');
     } catch (e) {
       _error = 'Failed to load reports';
       debugPrint('❌ AdminProvider.loadReports error: $e');
@@ -121,8 +157,14 @@ class AdminProvider with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
+      debugPrint('🔄 [AdminProvider] Updating user $userId to $status');
       final success = await _service.updateUserStatus(userId, status);
-      if (success) await loadUsers();
+      if (success) {
+        debugPrint('✅ [AdminProvider] User status updated, refreshing list');
+        await loadUsers();
+      } else {
+        debugPrint('⚠️ [AdminProvider] Update returned false');
+      }
       return success;
     } catch (e) {
       _error = 'Failed to update user status';
@@ -138,8 +180,14 @@ class AdminProvider with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
+      debugPrint('🗑️ [AdminProvider] Deleting user $userId');
       final success = await _service.deleteUser(userId);
-      if (success) await loadUsers();
+      if (success) {
+        debugPrint('✅ [AdminProvider] User deleted, refreshing list');
+        await loadUsers();
+      } else {
+        debugPrint('⚠️ [AdminProvider] Delete returned false');
+      }
       return success;
     } catch (e) {
       _error = 'Failed to delete user';
@@ -230,8 +278,12 @@ class AdminProvider with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
+      debugPrint('🗑️ [AdminProvider] Removing donation: $donationId');
       final success = await _service.removeDonation(donationId);
-      if (success) await loadDonations();
+      if (success) {
+        debugPrint('✅ [AdminProvider] Donation removed, refreshing list');
+        await loadDonations();
+      }
       return success;
     } catch (e) {
       _error = 'Failed to remove donation';
@@ -247,8 +299,12 @@ class AdminProvider with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
+      debugPrint('✅ [AdminProvider] Resolving report: $reportId');
       final success = await _service.resolveReport(reportId);
-      if (success) await loadReports();
+      if (success) {
+        debugPrint('🔄 [AdminProvider] Report resolved, refreshing list');
+        await loadReports();
+      }
       return success;
     } catch (e) {
       _error = 'Failed to resolve report';
@@ -264,8 +320,12 @@ class AdminProvider with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
+      debugPrint('🗑️ [AdminProvider] Deleting report: $reportId');
       final success = await _service.deleteReport(reportId);
-      if (success) await loadReports();
+      if (success) {
+        debugPrint('🔄 [AdminProvider] Report deleted, refreshing list');
+        await loadReports();
+      }
       return success;
     } catch (e) {
       _error = 'Failed to delete report';
@@ -283,5 +343,6 @@ class AdminProvider with ChangeNotifier {
   void clearError() {
     _error = null;
     notifyListeners();
+    debugPrint('🧹 [AdminProvider] Error cleared');
   }
 }
