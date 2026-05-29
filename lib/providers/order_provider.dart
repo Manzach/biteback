@@ -83,6 +83,63 @@ class OrderProvider with ChangeNotifier {
   }
 
   // ==================================================================
+  // ✅ NEW: FETCH PENDING ORDERS FOR BUYER (QR Collection Flow)
+  // ==================================================================
+  /// Fetches all pending orders for a specific buyer
+  /// Used by OrderCollectionScreen when seller scans buyer's QR code
+  /// 
+  /// Parameters:
+  ///   - buyerId: The UUID of the buyer whose orders to fetch
+  /// 
+  /// Returns:
+  ///   List of pending OrderModel objects (flattened from location groups)
+  // ==================================================================
+  Future<List<OrderModel>> getPendingOrdersForBuyer(String buyerId) async {
+    try {
+      debugPrint('🔍 [OrderProvider] Fetching pending orders for buyer $buyerId');
+      
+      // ✅ Fetch active orders grouped by location from service
+      final grouped = await _service.getActiveOrdersByLocation(buyerId);
+      
+      // ✅ Flatten the grouped map to a single list of pending orders
+      final pending = grouped.values.expand((list) => list).toList();
+      
+      debugPrint('✅ [OrderProvider] Found ${pending.length} pending orders for buyer $buyerId');
+      return pending;
+      
+    } catch (e, stack) {
+      debugPrint('❌ [OrderProvider] getPendingOrdersForBuyer error: $e');
+      debugPrint('📋 Stack: $stack');
+      return [];
+    }
+  }
+
+  // ==================================================================
+  // ✅ FETCH ORDERS BY IDs (For QR Collection Flow)
+  // ==================================================================
+  /// Fetches specific orders by their IDs
+  /// Used when seller scans QR and needs to validate order details
+  /// 
+  /// Parameters:
+  ///   - orderIds: List of order UUIDs to fetch
+  /// 
+  /// Returns:
+  ///   List of OrderModel objects matching the provided IDs
+  // ==================================================================
+  Future<List<OrderModel>> getOrdersByIds(List<String> orderIds) async {
+    try {
+      if (orderIds.isEmpty) return [];
+      
+      debugPrint('🔍 [OrderProvider] Fetching orders for IDs: $orderIds');
+      return await _service.getOrdersByIds(orderIds);
+    } catch (e, stack) {
+      debugPrint('❌ [OrderProvider] getOrdersByIds error: $e');
+      debugPrint('📋 Stack: $stack');
+      return [];
+    }
+  }
+
+  // ==================================================================
   // ✅ COLLECT ORDERS VIA SELLER QR SCAN (UC-04 Completion)
   // ==================================================================
   /// Updates order status to 'collected' and deducts listing quantity
@@ -99,9 +156,13 @@ class OrderProvider with ChangeNotifier {
     notifyListeners();
     
     try {
-      return await _service.collectOrders(orderIds);
-    } catch (e) {
+      debugPrint('🔄 [OrderProvider] Collecting ${orderIds.length} order(s)');
+      final result = await _service.collectOrders(orderIds);
+      debugPrint('📊 [OrderProvider] Collection result: success=${result['success']}, failed=${result['failed']}');
+      return result;
+    } catch (e, stack) {
       debugPrint('❌ OrderProvider.collectOrders error: $e');
+      debugPrint('📋 Stack: $stack');
       return {'success': 0, 'failed': orderIds.length};
     } finally {
       _isLoading = false;

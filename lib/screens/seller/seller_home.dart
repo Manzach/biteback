@@ -4,8 +4,7 @@
 // ============================================================================
 // Main dashboard for sellers to manage food listings (UC-05)
 // - View all listings with hide/show toggle
-// - Create new listings via navigation
-// - Delete listings with confirmation
+// - Create/Edit/Delete listings
 // - Scan QR codes for order collection
 // Uses SellerProvider for state management (Provider pattern)
 // Aligns with FYP Report: Table 11, UC-05, Figure 39
@@ -13,10 +12,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart'; // ✅ ADD THIS import
+import 'package:provider/provider.dart';
 import '../../config/app_colors.dart';
 import '../../models/food_listing_model.dart';
-import '../../providers/seller_provider.dart'; // ✅ ADD THIS import
+import '../../providers/seller_provider.dart';
 import 'create_listing_screen.dart';
 import 'order_collection_screen.dart';
 
@@ -31,29 +30,41 @@ class _SellerHomeState extends State<SellerHome> {
   @override
   void initState() {
     super.initState();
-    // Load listings AFTER first frame to avoid build-time async calls
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<SellerProvider>().loadListings();
     });
   }
 
   // ==================================================================
-  // OPEN CREATE LISTING SCREEN
+  // OPEN CREATE LISTING SCREEN (Create Mode)
   // ==================================================================
   Future<void> _openCreateListing() async {
     final result = await Navigator.push<FoodListing?>(
       context,
       MaterialPageRoute(builder: (context) => const CreateListingScreen()),
     );
-
-    // Refresh listings if a new one was created
     if (result != null && mounted) {
       context.read<SellerProvider>().loadListings();
     }
   }
 
   // ==================================================================
-  // DELETE LISTING (Via Provider)
+  // ✅ OPEN EDIT LISTING SCREEN (Edit Mode) - NEW METHOD
+  // ==================================================================
+  Future<void> _openEditListing(FoodListing listing) async {
+    final result = await Navigator.push<FoodListing?>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CreateListingScreen(listing: listing), // ✅ Pass existing listing
+      ),
+    );
+    if (result != null && mounted) {
+      context.read<SellerProvider>().loadListings();
+    }
+  }
+
+  // ==================================================================
+  // DELETE LISTING
   // ==================================================================
   Future<void> _deleteListing(String listingId) async {
     final confirmed = await showDialog<bool>(
@@ -76,7 +87,6 @@ class _SellerHomeState extends State<SellerHome> {
 
     if (confirmed == true && mounted) {
       final success = await context.read<SellerProvider>().deleteListing(listingId);
-      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -89,11 +99,10 @@ class _SellerHomeState extends State<SellerHome> {
   }
 
   // ==================================================================
-  // TOGGLE LISTING VISIBILITY (Via Provider)
+  // TOGGLE LISTING VISIBILITY
   // ==================================================================
   Future<void> _toggleVisibility(String listingId, bool isHidden) async {
     final success = await context.read<SellerProvider>().toggleVisibility(listingId, isHidden);
-    
     if (mounted && success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -116,7 +125,6 @@ class _SellerHomeState extends State<SellerHome> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Watch SellerProvider for real-time state updates
     final sellerProvider = context.watch<SellerProvider>();
     final listings = sellerProvider.listings;
     final isLoading = sellerProvider.isLoading;
@@ -124,15 +132,12 @@ class _SellerHomeState extends State<SellerHome> {
 
     return Scaffold(
       backgroundColor: AppColors.white,
-      
-      // ✅ FAB: Create new listing
       floatingActionButton: FloatingActionButton(
         onPressed: _openCreateListing,
         backgroundColor: AppColors.secondaryGreen,
         child: const Icon(Icons.add, color: Colors.white),
         tooltip: 'Post New Listing',
       ),
-      
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
@@ -143,13 +148,11 @@ class _SellerHomeState extends State<SellerHome> {
             ),
             floating: true,
             actions: [
-              // ✅ QR Scanner Button for Order Collection
               IconButton(
                 icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
                 onPressed: _openOrderScanner,
                 tooltip: 'Scan to Collect Orders',
               ),
-              // ✅ Refresh Button (triggers provider reload)
               IconButton(
                 icon: const Icon(Icons.refresh, color: Colors.white),
                 onPressed: () => sellerProvider.loadListings(),
@@ -157,7 +160,6 @@ class _SellerHomeState extends State<SellerHome> {
               ),
             ],
           ),
-          
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -169,12 +171,8 @@ class _SellerHomeState extends State<SellerHome> {
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 16),
-                  
-                  // ✅ Loading State
                   if (isLoading)
                     const Center(child: CircularProgressIndicator())
-                  
-                  // ✅ Error State
                   else if (error != null)
                     Center(
                       child: Column(
@@ -194,17 +192,11 @@ class _SellerHomeState extends State<SellerHome> {
                         ],
                       ),
                     )
-                  
-                  // ✅ Empty State
                   else if (listings.isEmpty)
                     Center(
                       child: Column(
                         children: [
-                          Icon(
-                            Icons.inbox_outlined,
-                            size: 60,
-                            color: Colors.grey[400],
-                          ),
+                          Icon(Icons.inbox_outlined, size: 60, color: Colors.grey[400]),
                           const SizedBox(height: 16),
                           Text(
                             'No listings yet',
@@ -218,8 +210,6 @@ class _SellerHomeState extends State<SellerHome> {
                         ],
                       ),
                     )
-                  
-                  // ✅ Listings List
                   else
                     ListView.builder(
                       shrinkWrap: true,
@@ -230,6 +220,7 @@ class _SellerHomeState extends State<SellerHome> {
                         return _buildListingCard(
                           listing: listing,
                           onDelete: () => _deleteListing(listing.id),
+                          onEdit: () => _openEditListing(listing), // ✅ Pass edit callback
                           onToggleVisibility: () => _toggleVisibility(
                             listing.id,
                             !listing.isHidden,
@@ -247,11 +238,12 @@ class _SellerHomeState extends State<SellerHome> {
   }
 
   // ==================================================================
-  // BUILD LISTING CARD (With Hide/Show Toggle)
+  // BUILD LISTING CARD (With Edit/Delete/Hide Actions)
   // ==================================================================
   Widget _buildListingCard({
     required FoodListing listing,
     required VoidCallback onDelete,
+    required VoidCallback onEdit, // ✅ NEW: Edit callback
     required VoidCallback onToggleVisibility,
   }) {
     final discount = listing.discountPercentage.toStringAsFixed(0);
@@ -261,14 +253,12 @@ class _SellerHomeState extends State<SellerHome> {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      // Visual distinction for hidden listings
       color: isHidden ? Colors.grey[50] : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Stack(
             children: [
-              // Image with opacity for hidden state
               if (listing.photoUrl != null)
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
@@ -297,8 +287,6 @@ class _SellerHomeState extends State<SellerHome> {
                   color: Colors.grey[300],
                   child: Icon(Icons.image_not_supported, color: Colors.grey[600]),
                 ),
-              
-              // Discount Badge
               Positioned(
                 top: 12,
                 right: 12,
@@ -318,8 +306,6 @@ class _SellerHomeState extends State<SellerHome> {
                   ),
                 ),
               ),
-              
-              // ✅ HIDDEN Badge (only when hidden)
               if (isHidden)
                 Positioned(
                   top: 12,
@@ -342,13 +328,11 @@ class _SellerHomeState extends State<SellerHome> {
                 ),
             ],
           ),
-          
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Food Name with hidden state styling
                 Text(
                   listing.foodName,
                   style: TextStyle(
@@ -358,7 +342,6 @@ class _SellerHomeState extends State<SellerHome> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -398,7 +381,6 @@ class _SellerHomeState extends State<SellerHome> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                
                 Row(
                   children: [
                     Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
@@ -413,11 +395,9 @@ class _SellerHomeState extends State<SellerHome> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                
-                // Action Buttons Row
                 Row(
                   children: [
-                    // ✅ Hide/Show Toggle Button
+                    // Hide/Show Toggle
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: onToggleVisibility,
@@ -436,13 +416,10 @@ class _SellerHomeState extends State<SellerHome> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    
-                    // Edit Button (placeholder - disabled when hidden)
+                    // ✅ Edit Button - NOW WORKS!
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: isHidden ? null : () {
-                          // TODO: Implement edit functionality
-                        },
+                        onPressed: isHidden ? null : onEdit, // ✅ Calls _openEditListing
                         icon: const Icon(Icons.edit_outlined, size: 16),
                         label: const Text('Edit'),
                         style: OutlinedButton.styleFrom(
@@ -451,7 +428,6 @@ class _SellerHomeState extends State<SellerHome> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    
                     // Delete Button
                     Expanded(
                       child: OutlinedButton.icon(

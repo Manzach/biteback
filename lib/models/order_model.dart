@@ -1,15 +1,22 @@
 // FILE: lib/models/order_model.dart
+// ============================================================================
+// ORDER MODEL
+// ============================================================================
+// Represents an order in the BiteBack system
+// Aligns with FYP Report: Table 12 (Order), UC-04, Figure 38
+// ============================================================================
+
 class OrderModel {
   final String id;
   final String buyerId;
   final String listingId;
   final int quantity;
-  final String status; // 'pending', 'collected', 'cancelled'
-  final String? qrCode; // ✅ Nullable: generated after order creation
+  final String status; // 'pending', 'collected', 'cancelled' (lowercase per DB)
+  final String? qrCode; // ✅ Nullable: format BB-{timestamp}-{buyer_id}
   final DateTime createdAt;
   final DateTime? collectedAt;
 
-  // ✅ JOINED FIELDS from food_listings (for UI display)
+  // ✅ JOINED FIELDS from food_listings (for UI display) - All nullable
   final String? foodName;
   final String? foodPhotoUrl;
   final double? price;
@@ -21,7 +28,7 @@ class OrderModel {
     required this.listingId,
     required this.quantity,
     required this.status,
-    this.qrCode, // ✅ Now nullable
+    this.qrCode,
     required this.createdAt,
     this.collectedAt,
     this.foodName,
@@ -30,39 +37,126 @@ class OrderModel {
     this.pickupLocation,
   });
 
-  // ✅ Parse Supabase response with nested food_listings join
+  // ==================================================================
+  // ✅ FACTORY: Parse Supabase JSON with SAFE NULL HANDLING
+  // Based on orders_rows.sql schema
+  // ==================================================================
   factory OrderModel.fromJson(Map<String, dynamic> json) {
+    // ✅ Safely extract nested food_listings join (may not always be present)
     final listing = json['food_listings'] as Map<String, dynamic>?;
     
     return OrderModel(
-      id: json['id'] as String,
-      buyerId: json['buyer_id'] as String,
-      listingId: json['listing_id'] as String,
-      quantity: (json['quantity'] as num).toInt(),
-      status: json['status'] as String,
-      qrCode: json['qr_code'] as String?, // ✅ Handle nullable
-      createdAt: DateTime.parse(json['created_at'] as String),
+      // ✅ Required fields with safe fallbacks
+      id: (json['id'] as String?)?.trim() ?? '',
+      buyerId: (json['buyer_id'] as String?)?.trim() ?? '',
+      listingId: (json['listing_id'] as String?)?.trim() ?? '',
+      
+      // ✅ Safe numeric parsing with fallback
+      quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+      
+      // ✅ Status: lowercase per your DB, with fallback
+      status: (json['status'] as String?)?.toLowerCase() ?? 'pending',
+      
+      // ✅ Nullable qr_code (format: BB-{timestamp}-{buyer_id})
+      qrCode: json['qr_code'] as String?,
+      
+      // ✅ Safe DateTime parsing with fallback to now
+      createdAt: json['created_at'] != null 
+          ? DateTime.tryParse(json['created_at'] as String) ?? DateTime.now()
+          : DateTime.now(),
+      
+      // ✅ Nullable collected_at
       collectedAt: json['collected_at'] != null 
-          ? DateTime.parse(json['collected_at'] as String) 
+          ? DateTime.tryParse(json['collected_at'] as String) 
           : null,
-      // ✅ Extract joined food_listings fields
+      
+      // ✅ Safely extract joined food_listings fields (all nullable)
       foodName: listing?['food_name'] as String?,
       foodPhotoUrl: listing?['photo_url'] as String?,
-      price: (listing?['discounted_price'] as num?)?.toDouble(),
+      
+      // ✅ Safe price parsing from listing's discounted_price
+      price: listing?['discounted_price'] != null 
+          ? (listing!['discounted_price'] as num?)?.toDouble() 
+          : null,
+      
+      // ✅ Pickup location from listing's location field
       pickupLocation: listing?['location'] as String?,
     );
   }
 
+  // ==================================================================
+  // ✅ METHOD: Convert to Map for Supabase (snake_case columns)
+  // ==================================================================
   Map<String, dynamic> toJson() {
     return {
       'id': id,
       'buyer_id': buyerId,
       'listing_id': listingId,
       'quantity': quantity,
-      'status': status,
+      'status': status.toLowerCase(),  // ✅ Ensure lowercase for DB
       'qr_code': qrCode,
       'created_at': createdAt.toIso8601String(),
       if (collectedAt != null) 'collected_at': collectedAt!.toIso8601String(),
     };
   }
+
+  // ==================================================================
+  // ✅ METHOD: Immutable copy for state updates
+  // ==================================================================
+  OrderModel copyWith({
+    String? id,
+    String? buyerId,
+    String? listingId,
+    int? quantity,
+    String? status,
+    String? qrCode,
+    DateTime? createdAt,
+    DateTime? collectedAt,
+    String? foodName,
+    String? foodPhotoUrl,
+    double? price,
+    String? pickupLocation,
+  }) {
+    return OrderModel(
+      id: id ?? this.id,
+      buyerId: buyerId ?? this.buyerId,
+      listingId: listingId ?? this.listingId,
+      quantity: quantity ?? this.quantity,
+      status: status ?? this.status,
+      qrCode: qrCode ?? this.qrCode,
+      createdAt: createdAt ?? this.createdAt,
+      collectedAt: collectedAt ?? this.collectedAt,
+      foodName: foodName ?? this.foodName,
+      foodPhotoUrl: foodPhotoUrl ?? this.foodPhotoUrl,
+      price: price ?? this.price,
+      pickupLocation: pickupLocation ?? this.pickupLocation,
+    );
+  }
+
+  // ==================================================================
+  // ✅ HELPERS: Status checks for UI logic
+  // ==================================================================
+  bool get isPending => status.toLowerCase() == 'pending';
+  bool get isCollected => status.toLowerCase() == 'collected';
+  bool get isCancelled => status.toLowerCase() == 'cancelled';
+
+  // ==================================================================
+  // ✅ DEBUG: toString() for console logging
+  // ==================================================================
+  @override
+  String toString() {
+    return 'OrderModel(id: $id, buyer: $buyerId, status: $status, qr: $qrCode)';
+  }
+
+  // ==================================================================
+  // ✅ EQUALS: For list comparisons and testing
+  // ==================================================================
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is OrderModel && other.id == id;
+  }
+
+  @override
+  int get hashCode => id.hashCode;
 }

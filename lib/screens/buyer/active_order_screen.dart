@@ -67,7 +67,8 @@ class _ActiveOrderScreenState extends State<ActiveOrderScreen> {
 
     // Generate QR payload: unique per location + all order IDs
     final orderIds = orders.map((o) => o.id).join(',');
-    final qrPayload = 'BB-LOC-${location.replaceAll(' ', '_')}_$orderIds';
+    final safeLocation = location.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
+    final qrPayload = 'BB-LOC-$safeLocation-$orderIds';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),

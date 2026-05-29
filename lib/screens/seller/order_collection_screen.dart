@@ -2,10 +2,14 @@
 // ============================================================================
 // ORDER COLLECTION SCREEN (SELLER QR SCANNER)
 // ============================================================================
-// Allows sellers to scan buyer QR codes to verify pickup
-// - Parses QR payload: BB-LOC-{safe_location}-{uuid1,uuid2,uuid3}
-// - Displays order details for confirmation
+// Allows sellers to scan buyer QR codes to verify food pickup
+// - Parses QR payloads for buyer pickup verification
+//   Supported formats:
+//     • BB-{timestamp}-{buyer_id} (legacy - from orders_rows.sql)
+//     • BB-LOC-{safe_location}-{order_id1,order_id2,...} (new)
+// - Fetches pending orders for the buyer or the scanned order IDs
 // - Updates order status to 'collected' + deducts listing quantity
+// - ✅ Refreshes SellerProvider to show updated quantities immediately
 // Aligns with FYP Report: UC-04, Figure 38, Table 12
 // ============================================================================
 
@@ -13,9 +17,12 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 import '../../config/app_colors.dart';
+import '../../config/supabase_config.dart'; // ✅ For SupabaseConfig.client
 import '../../providers/auth_provider.dart';
 import '../../providers/order_provider.dart';
+import '../../providers/seller_provider.dart';
 import '../../models/order_model.dart';
+import '../../services/order_service.dart';
 
 class OrderCollectionScreen extends StatefulWidget {
   const OrderCollectionScreen({super.key});
@@ -41,7 +48,10 @@ class _OrderCollectionScreenState extends State<OrderCollectionScreen> {
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: AppColors.primaryOrange,
-        title: const Text('Scan Order QR', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Scan Order QR',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
@@ -63,11 +73,11 @@ class _OrderCollectionScreenState extends State<OrderCollectionScreen> {
             controller: _controller,
             onDetect: (capture) {
               if (_isProcessing) return;
-              final String? qrValue = capture.barcodes.first.rawValue;
+              final qrValue = capture.barcodes.first.rawValue;
               if (qrValue != null) _processQR(context, qrValue);
             },
           ),
-          
+
           // Scanning guide overlay
           Center(
             child: Container(
@@ -79,7 +89,7 @@ class _OrderCollectionScreenState extends State<OrderCollectionScreen> {
               ),
             ),
           ),
-          
+
           // Instructions at bottom
           Positioned(
             bottom: 30,
@@ -88,10 +98,14 @@ class _OrderCollectionScreenState extends State<OrderCollectionScreen> {
             child: Text(
               'Align QR code within the frame',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
-          
+
           // Error message overlay
           if (_scanError != null)
             Positioned(
@@ -128,108 +142,183 @@ class _OrderCollectionScreenState extends State<OrderCollectionScreen> {
   }
 
   // ==================================================================
-  // ✅ PROCESS SCANNED QR CODE (FIXED PARSING LOGIC)
+  // ✅ PROCESS QR: With Seller UI Refresh After Success
   // ==================================================================
   Future<void> _processQR(BuildContext context, String qrPayload) async {
     setState(() {
       _isProcessing = true;
       _scanError = null;
     });
-    
-    // Pause scanning while processing
     await _controller.stop();
 
     try {
-      // ✅ Parse format: BB-LOC-{safe_location}-{uuid1,uuid2,uuid3}
-      // Example: BB-LOC-Mahallah_As_Siddiq-4c8b5734-ac84-4400-9b91-cb4f35698a7e,b602574f-8ec6-40d2-bca9-4a42214c1098
-      
-      // 1. Validate prefix
-      if (!qrPayload.startsWith('BB-LOC-')) {
-        throw Exception('Invalid QR format: missing BB-LOC- prefix');
-      }
-      
-      // 2. Remove prefix
-      final withoutPrefix = qrPayload.substring(7); // Remove 'BB-LOC-'
-      
-      // 3. Find the LAST dash to separate location from order IDs
-      // (Location may contain underscores, but order IDs are UUIDs with dashes)
-      final lastDashIndex = withoutPrefix.lastIndexOf('-');
-      
-      if (lastDashIndex == -1 || lastDashIndex == withoutPrefix.length - 1) {
-        throw Exception('Invalid QR structure: cannot separate location from order IDs');
-      }
-      
-      // 4. Extract location (replace underscores back to spaces for display)
-      final location = withoutPrefix.substring(0, lastDashIndex).replaceAll('_', ' ');
-      
-      // 5. Extract order IDs (comma-separated full UUIDs)
-      final orderIdsRaw = withoutPrefix.substring(lastDashIndex + 1);
-      final orderIds = orderIdsRaw.split(',')
-          .map((id) => id.trim())
-          .where((id) => id.isNotEmpty)
-          .toList();
-      
-      if (orderIds.isEmpty) {
-        throw Exception('No valid order IDs found in QR code');
-      }
-      
-      // ✅ Validate UUID format (optional but helpful for debugging)
-      final uuidRegex = RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', caseSensitive: false);
-      final invalidIds = orderIds.where((id) => !uuidRegex.hasMatch(id)).toList();
-      if (invalidIds.isNotEmpty) {
-        debugPrint('⚠️ [OrderCollection] Warning: Invalid UUID format in: $invalidIds');
-        // Continue anyway - Supabase will reject invalid IDs
+      // ✅ Trim and validate QR payload
+      final cleanPayload = qrPayload.trim();
+      debugPrint('🔍 [OrderCollection] Raw QR: "$cleanPayload"');
+
+      if (!cleanPayload.startsWith('BB-')) {
+        throw Exception('Invalid QR format (missing BB- prefix)');
       }
 
-      debugPrint('🔍 [OrderCollection] Parsed QR:');
-      debugPrint('   - Location: $location');
-      debugPrint('   - Order IDs: $orderIds');
+      final orderProvider = context.read<OrderProvider>();
+      List<OrderModel> orders = [];
 
-      // ✅ Show confirmation dialog with order details
-      final confirm = await _showConfirmationDialog(context, orderIds, location);
+      // ✅ Handle NEW format: BB-LOC-{safe_location}-{order_id1,order_id2,...}
+      if (cleanPayload.startsWith('BB-LOC-')) {
+        final withoutPrefix = cleanPayload.substring(7); // Remove 'BB-LOC-'
+        final firstDashIndex = withoutPrefix.indexOf('-');
+
+        if (firstDashIndex == -1) {
+          throw Exception('Invalid QR structure: expected BB-LOC-location-orderIds');
+        }
+
+        final orderIdsCsv = withoutPrefix.substring(firstDashIndex + 1).trim();
+        if (orderIdsCsv.isEmpty) {
+          throw Exception('Invalid QR structure: no order IDs found');
+        }
+
+        final orderIds = orderIdsCsv
+            .split(',')
+            .map((id) => id.trim())
+            .where((id) => id.isNotEmpty)
+            .toList();
+
+        if (orderIds.isEmpty) {
+          throw Exception('Invalid QR structure: no valid order IDs');
+        }
+
+        debugPrint('🔍 [OrderCollection] Extracted order IDs: $orderIds');
+        orders = await orderProvider.getOrdersByIds(orderIds);
+        debugPrint('📦 [OrderCollection] Found ${orders.length} orders from QR payload');
+
+      } 
+      // ✅ Handle LEGACY format: BB-{timestamp}-{buyer_id} (from orders_rows.sql)
+      else {
+        // Example: BB-1780059107094-4c8b5734-ac84-4400-9b91-cb4f35698a7e
+        final withoutPrefix = cleanPayload.substring(3); // Remove 'BB-'
+        final firstDashIndex = withoutPrefix.indexOf('-');
+
+        if (firstDashIndex == -1) {
+          throw Exception('Invalid QR structure: expected BB-timestamp-buyer_id');
+        }
+
+        // ✅ Extract buyer_id: everything after the FIRST dash
+        final buyerId = withoutPrefix.substring(firstDashIndex + 1).trim();
+        debugPrint('🔍 [OrderCollection] Extracted buyer ID: "$buyerId"');
+
+        // ✅ Validate UUID format (case-insensitive)
+        final uuidRegex = RegExp(
+          r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+          caseSensitive: false,
+        );
+
+        if (!uuidRegex.hasMatch(buyerId)) {
+          debugPrint('❌ [OrderCollection] UUID validation failed for: "$buyerId"');
+          throw Exception('Invalid buyer ID format');
+        }
+
+        debugPrint('✅ [OrderCollection] Valid buyer ID: $buyerId');
+
+        // ✅ Fetch pending orders for this buyer
+        orders = await orderProvider.getPendingOrdersForBuyer(buyerId);
+        debugPrint('📦 [OrderCollection] Found ${orders.length} pending orders');
+      }
+
+      if (orders.isEmpty) {
+        throw Exception('No pending orders found for this QR scan');
+      }
+
+      // ✅ Show confirmation dialog
+      final confirm = await _showConfirmationDialog(context, orders);
       if (!confirm || !mounted) {
         _resumeScanning();
         return;
       }
 
-      // ✅ Process collection via Provider
-      final orderProvider = context.read<OrderProvider>();
-      final result = await orderProvider.collectOrders(orderIds);
+      // ✅ Process collection for EACH order individually (to decrement stock)
+      int successCount = 0;
+      int failCount = 0;
+
+      for (final order in orders) {
+        try {
+          // ✅ FIXED: Use SupabaseConfig.client directly
+          final orderService = OrderService(SupabaseConfig.client);
+          
+          // ✅ CORRECT FIELD NAMES (matching OrderModel and DB schema):
+          // - order.id: Order ID (UUID)
+          // - order.listingId: Food listing ID (UUID) ← This is the critical field
+          // - order.quantity: Quantity ordered (int)
+          final result = await orderService.verifyPickupAndDecrementStock(
+            orderId: order.id,           // ✅ Order ID
+            listingId: order.listingId,  // ✅ Food listing ID (matches DB column: listing_id)
+            orderQuantity: order.quantity, // ✅ Quantity to deduct
+          );
+
+          if (result) {
+            successCount++;
+            debugPrint('✅ [OrderCollection] Order ${order.id} collected & stock updated');
+          } else {
+            failCount++;
+            debugPrint('❌ [OrderCollection] Order ${order.id} failed to collect');
+          }
+        } catch (e) {
+          failCount++;
+          debugPrint('❌ [OrderCollection] Error processing order ${order.id}: $e');
+        }
+      }
 
       if (!mounted) return;
-      
-      if (result['success']! > 0) {
-        _showSuccessDialog(context, result['success']!, result['failed']!);
+
+      // ✅ CRITICAL: Refresh seller listings to show updated quantities
+      if (successCount > 0) {
+        debugPrint('🔄 [OrderCollection] Refreshing seller listings...');
+        await context.read<SellerProvider>().loadListings();
+        debugPrint('✅ [OrderCollection] Seller UI refreshed with updated quantities');
+      }
+
+      // ✅ Show result dialog
+      if (successCount > 0) {
+        _showSuccessDialog(context, successCount, failCount);
       } else {
-        setState(() => _scanError = 'Failed to update orders. Try again.');
+        setState(() => _scanError = 'Failed to update orders');
+        debugPrint('❌ [OrderCollection] All collections failed');
         _resumeScanning();
       }
-      
+
     } catch (e) {
-      debugPrint('❌ [OrderCollection] QR processing error: $e');
+      debugPrint('❌ [OrderCollection] Error: $e');
       if (!mounted) return;
-      setState(() => _scanError = 'Invalid or expired QR code');
+      final msg = e.toString().replaceAll('Exception: ', '');
+      setState(() => _scanError = msg);
       _resumeScanning();
     }
   }
 
   void _resumeScanning() {
     if (mounted) {
-      setState(() {
-        _isProcessing = false;
-      });
+      setState(() => _isProcessing = false);
       _controller.start();
     }
   }
 
   // ==================================================================
-  // CONFIRMATION DIALOG (Show Order Details Before Collecting)
+  // CONFIRMATION DIALOG - FIXED FIELD NAMES (Matches OrderModel)
   // ==================================================================
   Future<bool> _showConfirmationDialog(
-    BuildContext context, 
-    List<String> orderIds,
-    String location,
+    BuildContext context,
+    List<OrderModel> orders,
   ) async {
+    // ✅ Calculate total using CORRECT field names from OrderModel:
+    // - order.price: joined from food_listings.discounted_price (nullable)
+    // - order.quantity: from orders.quantity
+    final total = orders.fold<double>(
+      0.0,
+      (sum, order) {
+        final unitPrice = order.price ?? 0; // ✅ Use order.price (not discountedPrice)
+        return sum + (unitPrice * order.quantity);
+      },
+    );
+
     return await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -240,9 +329,30 @@ class _OrderCollectionScreenState extends State<OrderCollectionScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('📍 Location: $location'),
+            Text('📦 ${orders.length} order(s) to collect:'),
             const SizedBox(height: 8),
-            Text('This QR contains ${orderIds.length} order(s).'),
+            // Show first 3 order items as preview
+            ...orders.take(3).map(
+              (order) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  // ✅ Use order.foodName (joined from food_listings.food_name)
+                  // Fallback to listingId substring if foodName is null
+                  '• ${order.foodName ?? 'Item'} x${order.quantity}',
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ),
+            ),
+            if (orders.length > 3)
+              Text(
+                '... and ${orders.length - 3} more',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+            const SizedBox(height: 12),
+            Text(
+              'Total: RM ${total.toStringAsFixed(2)}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
@@ -253,7 +363,10 @@ class _OrderCollectionScreenState extends State<OrderCollectionScreen> {
               child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('⚠️ Payment Reminder', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text(
+                    '⚠️ Payment Reminder',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   SizedBox(height: 4),
                   Text(
                     'Ensure payment has been settled manually (cash/external QR) before confirming collection.',

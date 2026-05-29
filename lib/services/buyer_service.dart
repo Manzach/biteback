@@ -3,7 +3,7 @@
 // BUYER SERVICE
 // ============================================================================
 // Handles Supabase database operations for buyer features
-// - Fetch active food listings (UC-04)
+// - Fetch active food listings (UC-04) ✅ with optional backend search
 // - Create & retrieve orders with QR codes (UC-04)
 // - Fetch donation advertisements (UC-07)
 // Aligns with FYP Report: Table 11 (Food Listing), UC-04, UC-07
@@ -25,22 +25,35 @@ class BuyerService {
   /// 
   /// Filters applied:
   /// - is_sold = false (not yet purchased)
-  /// - is_hidden = false (seller hasn't hidden it) ✅ NEW
+  /// - is_hidden = false (seller hasn't hidden it)
   /// - expiry_date >= now (still valid)
+  /// - Optional: searchQuery filters by food_name, description, or category (case-insensitive)
+  /// 
+  /// Parameters:
+  ///   - searchQuery: Optional search term to filter listings by name, description, or category
   /// 
   /// Returns listings ordered by creation date (newest first)
   // ==================================================================
-  Future<List<FoodListing>> fetchActiveListings() async {
+  Future<List<FoodListing>> fetchActiveListings({String? searchQuery}) async {
     try {
       final now = DateTime.now().toIso8601String();
       
-      final response = await _client
+      // Start with base query (always apply these filters)
+      var query = _client
           .from('food_listings')
           .select()
           .eq('is_sold', false)
-          .eq('is_hidden', false)  // ✅ ADD THIS: Exclude hidden listings
-          .gte('expiry_date', now)
-          .order('created_at', ascending: false);
+          .eq('is_hidden', false)
+          .gte('expiry_date', now);
+
+      // 🔍 Apply backend search filter if query provided
+      if (searchQuery != null && searchQuery.trim().isNotEmpty) {
+        final q = searchQuery.trim();
+        // Case-insensitive partial match on food_name, description, or category
+        query = query.or('food_name.ilike.%$q%,description.ilike.%$q%,category.ilike.%$q%');
+      }
+
+      final response = await query.order('created_at', ascending: false);
 
       return (response as List)
           .map((json) => FoodListing.fromJson(json as Map<String, dynamic>))

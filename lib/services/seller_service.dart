@@ -22,15 +22,6 @@ class SellerService {
   // ==================================================================
   // UPLOAD LISTING PHOTO TO SUPABASE STORAGE
   // ==================================================================
-  /// Uploads a food listing photo to Supabase Storage
-  /// 
-  /// Parameters:
-  ///   - filePath: Local path to the image file
-  ///   - fileName: Desired filename (e.g., 'sandwich_123.jpg')
-  /// 
-  /// Returns:
-  ///   Public URL of the uploaded image, or null if upload fails
-  // ==================================================================
   Future<String?> uploadListingPhoto(String filePath, String fileName) async {
     try {
       final file = File(filePath);
@@ -56,14 +47,6 @@ class SellerService {
 
   // ==================================================================
   // CREATE NEW FOOD LISTING
-  // ==================================================================
-  /// Creates a new food listing in the database
-  /// 
-  /// Parameters:
-  ///   - All required listing fields + optional photoUrl
-  /// 
-  /// Returns:
-  ///   FoodListing object if successful, null on failure
   // ==================================================================
   Future<FoodListing?> createListing({
     required String foodName,
@@ -91,7 +74,8 @@ class SellerService {
         'photo_url': photoUrl,
         'created_at': DateTime.now().toIso8601String(),
         'is_sold': false,
-        'is_hidden': false, // ✅ Default: visible to buyers
+        'is_hidden': false,
+        'is_deleted': false, // ✅ Default: not deleted
       };
 
       final response = await _supabase
@@ -108,10 +92,7 @@ class SellerService {
   }
 
   // ==================================================================
-  // FETCH SELLER'S LISTINGS
-  // ==================================================================
-  /// Retrieves all food listings created by the current seller
-  /// Returns listings ordered by creation date (newest first)
+  // FETCH SELLER'S LISTINGS (Excludes Soft-Deleted)
   // ==================================================================
   Future<List<FoodListing>> getSellerListings() async {
     try {
@@ -122,6 +103,7 @@ class SellerService {
           .from('food_listings')
           .select()
           .eq('seller_id', userId)
+          .eq('is_deleted', false) // ✅ Exclude soft-deleted listings
           .order('created_at', ascending: false);
 
       final listings = (response as List)
@@ -139,40 +121,40 @@ class SellerService {
   // ==================================================================
   // UPDATE EXISTING LISTING
   // ==================================================================
-  /// Updates an existing food listing (seller can only update their own)
-  /// 
-  /// Parameters:
-  ///   - listingId: ID of the listing to update
-  ///   - All fields to update (excluding seller_id for security)
-  /// 
-  /// Returns:
-  ///   Updated FoodListing object if successful, null on failure
-  // ==================================================================
   Future<FoodListing?> updateListing({
     required String listingId,
     required String foodName,
     required String description,
+    required double originalPrice,
     required double discountedPrice,
     required int quantity,
     required DateTime expiryDate,
     required String location,
+    String? photoUrl,
   }) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return null;
 
+      final Map<String, dynamic> updates = {
+        'food_name': foodName,
+        'description': description,
+        'original_price': originalPrice,
+        'discounted_price': discountedPrice,
+        'quantity': quantity,
+        'expiry_date': expiryDate.toIso8601String(),
+        'location': location,
+      };
+
+      if (photoUrl != null && photoUrl.isNotEmpty) {
+        updates['photo_url'] = photoUrl;
+      }
+
       final response = await _supabase
           .from('food_listings')
-          .update({
-            'food_name': foodName,
-            'description': description,
-            'discounted_price': discountedPrice,
-            'quantity': quantity,
-            'expiry_date': expiryDate.toIso8601String(),
-            'location': location,
-          })
+          .update(updates)
           .eq('id', listingId)
-          .eq('seller_id', userId) // ✅ Security: only update own listings
+          .eq('seller_id', userId)
           .select()
           .single();
 
@@ -184,44 +166,52 @@ class SellerService {
   }
 
   // ==================================================================
-  // DELETE LISTING
+  // ✅ SOFT DELETE LISTING (Preserves row for order history)
   // ==================================================================
-  /// Permanently deletes a food listing (seller can only delete their own)
+  /// Marks a listing as deleted instead of physically removing it.
+  /// This preserves foreign key integrity with the orders table,
+  /// allowing buyers to still view their past orders.
   /// 
   /// Parameters:
-  ///   - listingId: ID of the listing to delete
+  ///   - listingId: ID of the listing to soft-delete
   /// 
   /// Returns:
-  ///   true if deletion successful, false on failure
+  ///   true if update successful, false on failure
   // ==================================================================
   Future<bool> deleteListing(String listingId) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) return false;
+      
+      debugPrint('🗑️ [SellerService] Soft-delete requested');
+      debugPrint('🗑️ [SellerService] listingId: $listingId');
+      debugPrint('🗑️ [SellerService] userId: $userId');
+      
+      if (userId == null) {
+        debugPrint('❌ [SellerService] No authenticated user - aborting');
+        return false;
+      }
 
+      // ✅ SOFT DELETE: Update is_deleted flag instead of removing row
+      debugPrint('🗑️ [SellerService] Executing soft-delete update...');
+      
       await _supabase
           .from('food_listings')
-          .delete()
+          .update({'is_deleted': true})
           .eq('id', listingId)
-          .eq('seller_id', userId); // ✅ Security: only delete own listings
+          .eq('seller_id', userId);
 
+      debugPrint('✅ [SellerService] Listing marked as deleted (is_deleted=true)');
       return true;
-    } catch (e) {
-      debugPrint('❌ SellerService.deleteListing error: $e');
+      
+    } catch (e, stack) {
+      debugPrint('❌ [SellerService] deleteListing ERROR: $e');
+      debugPrint('❌ [SellerService] Stack trace: $stack');
       return false;
     }
   }
 
   // ==================================================================
   // MARK LISTING AS SOLD
-  // ==================================================================
-  /// Marks a listing as sold (removes from active listings)
-  /// 
-  /// Parameters:
-  ///   - listingId: ID of the listing to mark as sold
-  /// 
-  /// Returns:
-  ///   true if update successful, false on failure
   // ==================================================================
   Future<bool> markAsSold(String listingId) async {
     try {
@@ -242,17 +232,7 @@ class SellerService {
   }
 
   // ==================================================================
-  // ✅ NEW: TOGGLE LISTING VISIBILITY (Hide/Show from Buyers)
-  // ==================================================================
-  /// Toggles the visibility of a listing without deleting it
-  /// Hidden listings are excluded from buyer queries but remain in seller view
-  /// 
-  /// Parameters:
-  ///   - listingId: ID of the listing to toggle
-  ///   - isHidden: true to hide, false to show
-  /// 
-  /// Returns:
-  ///   true if update successful, false on failure
+  // TOGGLE LISTING VISIBILITY
   // ==================================================================
   Future<bool> toggleListingVisibility(String listingId, bool isHidden) async {
     try {
@@ -263,7 +243,7 @@ class SellerService {
           .from('food_listings')
           .update({'is_hidden': isHidden})
           .eq('id', listingId)
-          .eq('seller_id', userId); // ✅ Security: only toggle own listings
+          .eq('seller_id', userId);
 
       return true;
     } catch (e) {
