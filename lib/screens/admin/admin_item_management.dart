@@ -76,8 +76,8 @@ class _AdminItemManagementState extends State<AdminItemManagement> {
                       itemCount: listings.length,
                       itemBuilder: (context, index) {
                         final item = listings[index];
-                        // Skip removed items in the main list (optional)
-                        if (item.moderationStatus == 'Removed') return const SizedBox.shrink();
+                        // ✅ Skip removed items in the main list (soft-deleted)
+                        if (item.availabilityStatus?.toLowerCase() == 'removed') return const SizedBox.shrink();
 
                         return _buildListingCard(item, adminProvider);
                       },
@@ -86,10 +86,12 @@ class _AdminItemManagementState extends State<AdminItemManagement> {
   }
 
   // ==================================================================
-  // LISTING CARD WIDGET
+  // ✅ LISTING CARD WIDGET - WITH FLAGGED INDICATOR
   // ==================================================================
   Widget _buildListingCard(FoodListing item, AdminProvider provider) {
-    final bool isFlagged = item.moderationStatus == 'Flagged';
+    // ✅ Use correct field name from schema: availabilityStatus (maps to availability_status)
+    final status = item.availabilityStatus?.toLowerCase() ?? 'available';
+    final bool isFlagged = status == 'flagged';
     final dateFormat = DateFormat('MMM dd, yyyy');
 
     return Card(
@@ -122,24 +124,31 @@ class _AdminItemManagementState extends State<AdminItemManagement> {
                         child: const Icon(Icons.image_not_supported, size: 50, color: Colors.grey),
                       ),
               ),
-              // STATUS BADGE
+              // ✅ STATUS BADGE - Shows Flagged/Available/Sold/Expired
               Positioned(
                 top: 12,
                 right: 12,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: isFlagged ? Colors.orange[100] : AppColors.secondaryGreen.withOpacity(0.9),
+                    color: _getStatusColor(status).withOpacity(0.9),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: isFlagged ? Colors.orange : AppColors.secondaryGreen, width: 1),
+                    border: Border.all(color: _getStatusColor(status), width: 1),
                   ),
-                  child: Text(
-                    item.moderationStatus.toUpperCase(),
-                    style: TextStyle(
-                      color: isFlagged ? Colors.orange[800] : Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (isFlagged) const Icon(Icons.flag, size: 12, color: Colors.white),
+                      if (isFlagged) const SizedBox(width: 4),
+                      Text(
+                        status.toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -194,12 +203,35 @@ class _AdminItemManagementState extends State<AdminItemManagement> {
                   ],
                 ),
                 
+                // ✅ ADD THIS: Flagged indicator row with icon + text
+                if (isFlagged) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.orange[100],
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.flag, size: 14, color: Colors.orange),
+                        SizedBox(width: 4),
+                        Text(
+                          'Flagged for review',
+                          style: TextStyle(fontSize: 12, color: Colors.orange, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                
                 const SizedBox(height: 16),
 
                 // ACTION BUTTONS
                 Row(
                   children: [
-                    // FLAG / APPROVE BUTTON
+                    // ✅ FLAG / APPROVE BUTTON - Changes based on status
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () {
@@ -241,6 +273,26 @@ class _AdminItemManagementState extends State<AdminItemManagement> {
         ],
       ),
     );
+  }
+
+  // ==================================================================
+  // ✅ HELPER: Get status badge color
+  // ==================================================================
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'flagged':
+        return Colors.orange;
+      case 'available':
+        return AppColors.secondaryGreen;
+      case 'removed':
+        return Colors.grey;
+      case 'sold':
+        return Colors.blue;
+      case 'expired':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
   }
 
   // ==================================================================

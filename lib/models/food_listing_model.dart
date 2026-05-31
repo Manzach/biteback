@@ -3,7 +3,7 @@
 // FOOD LISTING MODEL
 // ============================================================================
 // Represents a food item listed by a seller for discounted sale
-// Includes moderation status for admin oversight (UC-08)
+// Includes availability status for admin oversight and soft-delete (UC-08)
 // Aligns with FYP Report: Table 11 (Food Listing)
 // ============================================================================
 
@@ -21,7 +21,10 @@ class FoodListing {
   final bool isHidden;
   final bool isSold;
   final double originalPrice;
-  final String moderationStatus; // ✅ NEW: 'Active', 'Flagged', 'Removed'
+  
+  // ✅ FIXED: Use availabilityStatus to match database column 'availability_status'
+  // Valid values: 'Available', 'Sold', 'Expired', 'Removed', 'Flagged' (per Table 11)
+  final String availabilityStatus;
 
   FoodListing({
     required this.id,
@@ -37,7 +40,8 @@ class FoodListing {
     this.isHidden = false,
     this.isSold = false,
     required this.originalPrice,
-    this.moderationStatus = 'Active', // ✅ DEFAULT: Visible to buyers
+    // ✅ DEFAULT: 'Available' per schema
+    this.availabilityStatus = 'Available',
   });
 
   // ==================================================================
@@ -58,8 +62,8 @@ class FoodListing {
       isHidden: json['is_hidden'] as bool? ?? false,
       isSold: json['is_sold'] as bool? ?? false,
       originalPrice: (json['original_price'] as num).toDouble(),
-      // ✅ Map DB column 'moderation_status' to Dart field
-      moderationStatus: json['moderation_status'] as String? ?? 'Active',
+      // ✅ FIXED: Map DB column 'availability_status' to Dart field
+      availabilityStatus: json['availability_status'] as String? ?? 'Available',
     );
   }
 
@@ -81,7 +85,8 @@ class FoodListing {
       'is_hidden': isHidden,
       'is_sold': isSold,
       'original_price': originalPrice,
-      'moderation_status': moderationStatus, // ✅ Include for updates
+      // ✅ FIXED: Use correct DB column name
+      'availability_status': availabilityStatus,
     };
   }
 
@@ -103,7 +108,7 @@ class FoodListing {
       isHidden: false,
       isSold: false,
       originalPrice: 0,
-      moderationStatus: 'Active', // ✅ Default for empty
+      availabilityStatus: 'Available', // ✅ Default for empty
     );
   }
 
@@ -124,14 +129,19 @@ class FoodListing {
     return expiryDate.isBefore(DateTime.now());
   }
 
-  bool get isAvailable => !isSold && !isExpired && quantity > 0;
+  // ==================================================================
+  // ✅ FIXED: Availability Status Helpers (Cleaner UI checks)
+  // ==================================================================
+  bool get isAvailable => 
+      availabilityStatus.toLowerCase() == 'available' && 
+      !isSold && 
+      !isExpired && 
+      quantity > 0;
 
-  // ==================================================================
-  // ✅ NEW: Moderation Status Helpers (Cleaner UI checks)
-  // ==================================================================
-  bool get isActive => moderationStatus.toLowerCase() == 'active';
-  bool get isFlagged => moderationStatus.toLowerCase() == 'flagged';
-  bool get isRemoved => moderationStatus.toLowerCase() == 'removed';
+  bool get isFlagged => availabilityStatus.toLowerCase() == 'flagged';
+  bool get isRemoved => availabilityStatus.toLowerCase() == 'removed';
+  bool get isSoldStatus => availabilityStatus.toLowerCase() == 'sold';
+  bool get isExpiredStatus => availabilityStatus.toLowerCase() == 'expired';
 
   // ==================================================================
   // ✅ NEW: CopyWith for immutable updates
@@ -150,7 +160,7 @@ class FoodListing {
     bool? isHidden,
     bool? isSold,
     double? originalPrice,
-    String? moderationStatus,
+    String? availabilityStatus,
   }) {
     return FoodListing(
       id: id ?? this.id,
@@ -166,7 +176,7 @@ class FoodListing {
       isHidden: isHidden ?? this.isHidden,
       isSold: isSold ?? this.isSold,
       originalPrice: originalPrice ?? this.originalPrice,
-      moderationStatus: moderationStatus ?? this.moderationStatus,
+      availabilityStatus: availabilityStatus ?? this.availabilityStatus,
     );
   }
 }

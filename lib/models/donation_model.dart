@@ -56,6 +56,7 @@ class DonationModel {
       availabilityDate: map['availability_date'] != null
           ? DateTime.parse(map['availability_date'] as String)
           : null,
+      // ✅ Map DB column 'availability_status' to Dart field with fallback
       availabilityStatus: map['availability_status'] as String? ?? 
                           map['status'] as String? ?? 'Available',
       photoUrl: map['photo_url'] as String? ?? map['image_url'] as String?,
@@ -78,6 +79,7 @@ class DonationModel {
       'date_posted': datePosted.toIso8601String(),
       if (availabilityDate != null) 
         'availability_date': availabilityDate!.toIso8601String(),
+      // ✅ Use correct DB column name
       'availability_status': availabilityStatus,
       if (photoUrl != null) 'photo_url': photoUrl,
       if (quantity != null) 'quantity': quantity,
@@ -95,14 +97,22 @@ class DonationModel {
       donationDescription: '',
       pickupLocation: '',
       datePosted: DateTime.now(),
-      availabilityStatus: 'Available',
+      availabilityStatus: 'Available', // ✅ Default matches schema
     );
   }
 
   // ==================================================================
-  // ✅ HELPER: Check if donation is still available for claiming
+  // ✅ STATUS HELPERS - Null-safe & lowercase comparison
   // ==================================================================
+  
+  /// Check if donation is still available for claiming
   bool get isAvailable => availabilityStatus.toLowerCase() == 'available';
+  
+  /// Check if donation has been claimed
+  bool get isClaimed => availabilityStatus.toLowerCase() == 'claimed';
+  
+  /// Check if donation was removed by admin
+  bool get isRemoved => availabilityStatus.toLowerCase() == 'removed';
 
   // ==================================================================
   // ✅ HELPER: Format date for display (DD/MM/YYYY)

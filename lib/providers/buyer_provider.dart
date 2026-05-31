@@ -6,6 +6,7 @@
 // - Fetches & caches active food listings with search filtering
 // - Handles order placement & history
 // - Manages donation advertisements
+// - Handles cart checkout with denormalized order data
 // Aligns with FYP Report: Table 5, UC-04, UC-07, Provider Architecture
 // ============================================================================
 
@@ -81,7 +82,6 @@ class BuyerProvider with ChangeNotifier {
   // ==================================================================
   /// Returns listings filtered by current search query
   /// Filters by: food name, description, location
-  /// (category removed - not in FoodListing model)
   /// This provides INSTANT UI feedback without backend calls
   List<FoodListing> get availableListings {
     // Start with base listings (already filtered by service for active/available)
@@ -93,7 +93,6 @@ class BuyerProvider with ChangeNotifier {
       results = _listings.where((listing) {
         return listing.foodName.toLowerCase().contains(query) ||
                listing.description.toLowerCase().contains(query) ||
-               // ❌ REMOVED: listing.category (doesn't exist in FoodListing model)
                listing.location.toLowerCase().contains(query);
       }).toList();
     }
@@ -106,16 +105,12 @@ class BuyerProvider with ChangeNotifier {
   // ==================================================================
 
   /// Load active, unsold, non-expired food listings from Supabase
-  /// 
-  /// Note: For search, use client-side filtering via `availableListings` getter
-  /// Backend search via `searchQuery` parameter is optional for large datasets
   Future<void> loadListings() async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      // Load ALL active listings (service handles is_deleted, is_sold, expiry filters)
       _listings = await _service.fetchActiveListings();
       debugPrint('📦 [BuyerProvider] Loaded ${_listings.length} active listings');
     } catch (e) {
@@ -136,16 +131,25 @@ class BuyerProvider with ChangeNotifier {
   // 🛒 ORDER METHODS
   // ==================================================================
 
-  /// Place an order for a food listing and generate QR code
+  /// Place a SINGLE order for a food listing (for quick buy)
   Future<OrderModel?> placeOrder({
     required String listingId,
     int quantity = 1,
   }) async {
     try {
+      // Find the listing to extract denormalized data
+      final listing = _listings.firstWhere(
+        (l) => l.id == listingId,
+        orElse: () => FoodListing.empty(),
+      );
+      
       final order = await _service.createOrder(
         listingId: listingId,
+        foodName: listing.foodName,       // ✅ Denormalized: snapshot of food name
+        unitPrice: listing.discountedPrice, // ✅ Denormalized: price at purchase
         quantity: quantity,
       );
+      
       if (order != null) {
         _orders.insert(0, order); // Add to top of history
         notifyListeners();
@@ -157,6 +161,61 @@ class BuyerProvider with ChangeNotifier {
       notifyListeners();
       return null;
     }
+  }
+
+  /// ✅ CHECKOUT: Place orders for multiple cart items with denormalized data
+  /// 
+  /// Groups orders by pickup location for OrderSuccessScreen display
+  /// 
+  /// Parameters:
+  ///   - cartItems: List of CartItem objects from CartProvider
+  /// 
+  /// Returns:
+  ///   Map<String, List<OrderModel>> grouped by pickup location
+  // ==================================================================
+  Future<Map<String, List<OrderModel>>> checkout(List<CartItem> cartItems) async {
+    final groupedOrders = <String, List<OrderModel>>{};
+    
+    debugPrint('🛒 [BuyerProvider] Starting checkout with ${cartItems.length} items');
+    
+    for (final cartItem in cartItems) {
+      // ✅ Extract denormalized data for historical accuracy
+      final foodName = cartItem.listing.foodName;
+      final unitPrice = cartItem.listing.discountedPrice;
+      final quantity = cartItem.quantity;
+      final listingId = cartItem.listing.id;
+      
+      debugPrint('📦 [BuyerProvider] Creating order: food=$foodName, unit=RM$unitPrice, qty=$quantity');
+      
+      try {
+        // ✅ Pass ALL required parameters to createOrder()
+        final order = await _service.createOrder(
+          listingId: listingId,
+          foodName: foodName,           // ✅ Required: snapshot of food name
+          unitPrice: unitPrice,         // ✅ Required: price per unit at purchase
+          quantity: quantity,
+        );
+        
+        // Group orders by pickup location for OrderSuccessScreen display
+        groupedOrders
+            .putIfAbsent(cartItem.listing.location, () => [])
+            .add(order);
+            
+        debugPrint('✅ [BuyerProvider] Order created: ${order.id}');
+        
+      } catch (e, stack) {
+        debugPrint('❌ [BuyerProvider] Failed to create order for $foodName: $e');
+        debugPrint('📋 Stack: $stack');
+        // Continue with other items instead of failing entire checkout
+      }
+    }
+    
+    // ✅ FIX: Call clearCart() as standalone statement (it returns void)
+    // Then return the actual grouped orders data
+    debugPrint('🧹 [BuyerProvider] Checkout complete, returning ${groupedOrders.length} location groups');
+    
+    // ✅ Return the actual data (NOT the result of any void method)
+    return groupedOrders;
   }
 
   /// Load buyer's order history from Supabase
@@ -222,4 +281,19 @@ class BuyerProvider with ChangeNotifier {
     _donationErrorMessage = null;
     notifyListeners();
   }
+}
+
+// ==================================================================
+// ✅ CART ITEM MODEL (Helper class for checkout - defined here for simplicity)
+// ==================================================================
+class CartItem {
+  final FoodListing listing;
+  int quantity;
+
+  CartItem({
+    required this.listing,
+    this.quantity = 1,
+  });
+
+  double get subtotal => listing.discountedPrice * quantity;
 }

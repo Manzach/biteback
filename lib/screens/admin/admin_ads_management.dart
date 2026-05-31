@@ -78,8 +78,8 @@ class _AdminAdsManagementState extends State<AdminAdsManagement> {
                       itemCount: donations.length,
                       itemBuilder: (context, index) {
                         final donation = donations[index];
-                        // Skip removed ads (optional)
-                        if (donation.availabilityStatus == 'Removed') return const SizedBox.shrink();
+                        // ✅ Skip removed ads (soft-deleted) - use lowercase for consistency
+                        if (donation.availabilityStatus?.toLowerCase() == 'removed') return const SizedBox.shrink();
 
                         return _buildDonationCard(donation, adminProvider);
                       },
@@ -88,11 +88,11 @@ class _AdminAdsManagementState extends State<AdminAdsManagement> {
   }
 
   // ==================================================================
-  // DONATION CARD WIDGET
+  // ✅ DONATION CARD WIDGET - WITH STATUS INDICATORS
   // ==================================================================
   Widget _buildDonationCard(DonationModel donation, AdminProvider provider) {
+    final status = donation.availabilityStatus?.toLowerCase() ?? 'available';
     final dateFormat = DateFormat('MMM dd, yyyy');
-    final isAvailable = donation.availabilityStatus == 'Available';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -110,20 +110,22 @@ class _AdminAdsManagementState extends State<AdminAdsManagement> {
               children: [
                 Expanded(
                   child: Text(
-                    donation.donationTitle,
+                    donation.donationTitle ?? 'Food Donation',
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
+                // ✅ STATUS BADGE - Shows Available/Claimed/Removed
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: isAvailable ? AppColors.secondaryGreen.withOpacity(0.1) : Colors.grey[200],
+                    color: _getStatusColor(status).withOpacity(0.9),
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _getStatusColor(status), width: 1),
                   ),
                   child: Text(
-                    donation.availabilityStatus,
-                    style: TextStyle(
-                      color: isAvailable ? AppColors.secondaryGreen : Colors.grey[600],
+                    status.toUpperCase(),
+                    style: const TextStyle(
+                      color: Colors.white,
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
                     ),
@@ -149,7 +151,7 @@ class _AdminAdsManagementState extends State<AdminAdsManagement> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                donation.donationDescription,
+                donation.donationDescription ?? 'No description provided',
                 style: const TextStyle(fontSize: 13, color: Colors.black87),
               ),
             ),
@@ -160,31 +162,57 @@ class _AdminAdsManagementState extends State<AdminAdsManagement> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  '📍 ${donation.pickupLocation}',
+                  '📍 ${donation.pickupLocation ?? 'Campus Location'}',
                   style: TextStyle(fontSize: 12, color: Colors.grey[700]),
                 ),
                 Text(
-                  '📅 ${dateFormat.format(donation.datePosted)}',
+                  '📅 ${dateFormat.format(donation.datePosted ?? DateTime.now())}',
                   style: TextStyle(fontSize: 12, color: Colors.grey[700]),
                 ),
               ],
             ),
+            
+            // ✅ ADD THIS: Quantity info if available
+            if (donation.quantity != null && donation.quantity! > 0) ...[
+              const SizedBox(height: 4),
+              Text(
+                '${donation.quantity} pack(s) available',
+                style: TextStyle(fontSize: 12, color: AppColors.secondaryGreen, fontWeight: FontWeight.w500),
+              ),
+            ],
+            
             const SizedBox(height: 16),
 
-            // ACTION BUTTON
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => _showRemoveDialog(context, donation, provider),
-                icon: const Icon(Icons.delete_outline, size: 18),
-                label: const Text('Remove Ad'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.red,
-                  side: BorderSide(color: Colors.red),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
+            // ACTION BUTTON - Only show Remove for available donations
+            if (status == 'available')
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => _showRemoveDialog(context, donation, provider),
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  label: const Text('Remove Ad'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red,
+                    side: BorderSide(color: Colors.red),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
+              )
+            else
+              // Show disabled state for claimed/removed ads
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: null,
+                  icon: const Icon(Icons.check_circle, size: 18),
+                  label: Text(status == 'claimed' ? 'Claimed' : 'Removed'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.grey,
+                    side: BorderSide(color: Colors.grey),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -192,7 +220,23 @@ class _AdminAdsManagementState extends State<AdminAdsManagement> {
   }
 
   // ==================================================================
-  // ✅ REMOVE CONFIRMATION DIALOG (With Debug Logging)
+  // ✅ HELPER: Get status badge color
+  // ==================================================================
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'available':
+        return AppColors.secondaryGreen;
+      case 'claimed':
+        return Colors.blue;
+      case 'removed':
+        return Colors.grey;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  // ==================================================================
+  // ✅ REMOVE CONFIRMATION DIALOG - FIXED WITH ASYNC/AWAIT ✅
   // ==================================================================
   void _showRemoveDialog(BuildContext context, DonationModel donation, AdminProvider provider) {
     showDialog(
@@ -222,7 +266,8 @@ class _AdminAdsManagementState extends State<AdminAdsManagement> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           TextButton(
-            onPressed: () {
+            // ✅ FIXED: Make callback async and await the provider call
+            onPressed: () async {
               // ✅ ADD DEBUG LOGGING TO TRACE THE FLOW
               debugPrint('🗑️ [UI] Remove button pressed for donation: "${donation.donationTitle}"');
               debugPrint('🗑️ [UI] Donation ID being passed: "${donation.donationId}"');
@@ -239,15 +284,23 @@ class _AdminAdsManagementState extends State<AdminAdsManagement> {
                 return;
               }
               
-              // ✅ CALL PROVIDER TO REMOVE DONATION
+              // ✅ CALL PROVIDER TO REMOVE DONATION - AWAIT THE RESULT
               debugPrint('🔄 [UI] Calling provider.removeDonation("${donation.donationId}")...');
-              provider.removeDonation(donation.donationId);
+              final success = await provider.removeDonation(donation.donationId);
               
-              // ✅ CLOSE DIALOG AND SHOW SUCCESS MESSAGE
+              // ✅ CLOSE DIALOG FIRST
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Donation ad removed successfully'), backgroundColor: Colors.red),
-              );
+              
+              // ✅ ONLY SHOW SUCCESS IF BACKEND ACTUALLY SUCCEEDED
+              if (success) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Donation ad removed successfully'), backgroundColor: Colors.green),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Failed to remove donation. Check admin permissions.'), backgroundColor: Colors.red),
+                );
+              }
             },
             child: const Text('Remove', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
           ),

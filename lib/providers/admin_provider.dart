@@ -5,6 +5,7 @@
 // State management for admin monitoring & moderation (UC-08)
 // - Centralizes dashboard stats, user/listing/donation/report data
 // - Handles loading, error, and moderation actions
+// - Auto-refreshes dashboard stats after moderation actions
 // Aligns with FYP Report: Table 14, UC-08, Provider Architecture
 // ============================================================================
 
@@ -17,11 +18,22 @@ import '../models/donation_model.dart';
 class AdminProvider with ChangeNotifier {
   final AdminService _service;
 
+  // ==================================================================
+  // DASHBOARD DATA
+  // ==================================================================
   Map<String, int> _stats = {};
+  
+  // ==================================================================
+  // MANAGEMENT DATA
+  // ==================================================================
   List<UserModel> _users = [];
   List<FoodListing> _listings = [];
   List<DonationModel> _donations = [];
   List<Map<String, dynamic>> _reports = [];
+  
+  // ==================================================================
+  // STATE
+  // ==================================================================
   bool _isLoading = false;
   String? _error;
 
@@ -31,36 +43,42 @@ class AdminProvider with ChangeNotifier {
   // GETTERS
   // ==================================================================
   Map<String, int> get stats => Map.unmodifiable(_stats);
+  
   List<UserModel> get users => List.unmodifiable(_users);
   List<FoodListing> get listings => List.unmodifiable(_listings);
   List<DonationModel> get donations => List.unmodifiable(_donations);
   List<Map<String, dynamic>> get reports => List.unmodifiable(_reports);
+  
   bool get isLoading => _isLoading;
   String? get error => _error;
 
   // ==================================================================
-  // LOAD DASHBOARD DATA
+  // LOAD DASHBOARD DATA - WITH AUTO-REFRESH ✅
   // ==================================================================
   Future<void> loadDashboard() async {
     _isLoading = true;
     _error = null;
     notifyListeners();
+    debugPrint('🔍 [AdminProvider] Loading dashboard stats...');
 
     try {
-      debugPrint('🔍 [AdminProvider] Loading dashboard stats...');
+      // Load platform stats (filters soft-deleted items)
       _stats = await _service.getDashboardStats();
       debugPrint('✅ [AdminProvider] Stats loaded: $_stats');
-    } catch (e) {
-      _error = 'Failed to load dashboard stats';
-      debugPrint('❌ AdminProvider.loadDashboard error: $e');
+      
+    } catch (e, stack) {
+      _error = 'Failed to load dashboard: ${e.toString()}';
+      debugPrint('❌ [AdminProvider] loadDashboard error: $e');
+      debugPrint('📋 Stack: $stack');
     } finally {
       _isLoading = false;
       notifyListeners();
+      debugPrint('🔄 [AdminProvider] Dashboard load complete');
     }
   }
 
   // ==================================================================
-  // LOAD USERS - ENHANCED WITH DETAILED LOGGING ✅
+  // LOAD USERS
   // ==================================================================
   Future<void> loadUsers() async {
     _isLoading = true;
@@ -69,27 +87,12 @@ class AdminProvider with ChangeNotifier {
     
     try {
       debugPrint('🔍 [AdminProvider] Loading users from database...');
-      
       _users = await _service.getAllUsers();
-      
-      debugPrint('📦 [AdminProvider] Service returned ${_users.length} users');
+      debugPrint('✅ [AdminProvider] Loaded ${_users.length} users');
       
       if (_users.isEmpty) {
-        debugPrint('⚠️ [AdminProvider] No users found - check:');
-        debugPrint('   1. RLS policies on profiles table');
-        debugPrint('   2. Database has user records');
-        debugPrint('   3. Admin role in auth.users metadata');
-      } else {
-        // Log first 3 users for debugging
-        for (int i = 0; i < _users.length && i < 3; i++) {
-          final user = _users[i];
-          debugPrint('✅ [AdminProvider] User $i: ${user.fullName} (${user.userRole}) - ${user.accountStatus}');
-        }
-        if (_users.length > 3) {
-          debugPrint('... and ${_users.length - 3} more users');
-        }
+        debugPrint('⚠️ [AdminProvider] No users found - check RLS policies');
       }
-      
     } catch (e, stack) {
       _error = 'Failed to load users: ${e.toString()}';
       debugPrint('❌ [AdminProvider] loadUsers error: $e');
@@ -97,10 +100,12 @@ class AdminProvider with ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
-      debugPrint('🔄 [AdminProvider] Loading state reset, users count: ${_users.length}');
     }
   }
 
+  // ==================================================================
+  // LOAD LISTINGS
+  // ==================================================================
   Future<void> loadListings() async {
     _isLoading = true;
     notifyListeners();
@@ -117,6 +122,9 @@ class AdminProvider with ChangeNotifier {
     }
   }
 
+  // ==================================================================
+  // LOAD DONATIONS
+  // ==================================================================
   Future<void> loadDonations() async {
     _isLoading = true;
     notifyListeners();
@@ -133,6 +141,9 @@ class AdminProvider with ChangeNotifier {
     }
   }
 
+  // ==================================================================
+  // LOAD REPORTS
+  // ==================================================================
   Future<void> loadReports() async {
     _isLoading = true;
     notifyListeners();
@@ -150,7 +161,7 @@ class AdminProvider with ChangeNotifier {
   }
 
   // ==================================================================
-  // MODERATION ACTIONS (With Loading State & Error Handling)
+  // MODERATION ACTIONS - WITH DASHBOARD REFRESH ✅
   // ==================================================================
   
   Future<bool> updateUserStatus(String userId, String status) async {
@@ -160,8 +171,11 @@ class AdminProvider with ChangeNotifier {
       debugPrint('🔄 [AdminProvider] Updating user $userId to $status');
       final success = await _service.updateUserStatus(userId, status);
       if (success) {
-        debugPrint('✅ [AdminProvider] User status updated, refreshing list');
-        await loadUsers();
+        debugPrint('✅ [AdminProvider] User status updated, refreshing data');
+        await Future.wait([
+          loadUsers(),      // Refresh user list
+          loadDashboard(),  // ✅ Refresh dashboard stats
+        ]);
       } else {
         debugPrint('⚠️ [AdminProvider] Update returned false');
       }
@@ -183,8 +197,11 @@ class AdminProvider with ChangeNotifier {
       debugPrint('🗑️ [AdminProvider] Deleting user $userId');
       final success = await _service.deleteUser(userId);
       if (success) {
-        debugPrint('✅ [AdminProvider] User deleted, refreshing list');
-        await loadUsers();
+        debugPrint('✅ [AdminProvider] User deleted, refreshing data');
+        await Future.wait([
+          loadUsers(),      // Refresh user list
+          loadDashboard(),  // ✅ Refresh dashboard stats
+        ]);
       } else {
         debugPrint('⚠️ [AdminProvider] Delete returned false');
       }
@@ -199,23 +216,21 @@ class AdminProvider with ChangeNotifier {
     }
   }
 
-  // ✅ IMPROVED: Flag listing with loading state & error handling
   Future<bool> flagListing(String listingId) async {
     _isLoading = true;
     notifyListeners();
     try {
-      debugPrint('🚩 [Provider] Flagging listing: $listingId');
+      debugPrint('🚩 [AdminProvider] Flagging listing: $listingId');
       final success = await _service.flagListing(listingId);
-      
       if (success) {
-        debugPrint('🔄 [Provider] Refreshing listings after flag');
+        debugPrint('🔄 [AdminProvider] Refreshing listings after flag');
         await loadListings();
         return true;
       }
       return false;
     } catch (e, stack) {
       _error = 'Failed to flag listing';
-      debugPrint('❌ [Provider] flagListing error: $e');
+      debugPrint('❌ [AdminProvider] flagListing error: $e');
       debugPrint('📋 Stack: $stack');
       return false;
     } finally {
@@ -224,23 +239,21 @@ class AdminProvider with ChangeNotifier {
     }
   }
 
-  // ✅ IMPROVED: Approve listing with loading state & error handling
   Future<bool> approveListing(String listingId) async {
     _isLoading = true;
     notifyListeners();
     try {
-      debugPrint('✅ [Provider] Approving listing: $listingId');
+      debugPrint('✅ [AdminProvider] Approving listing: $listingId');
       final success = await _service.approveListing(listingId);
-      
       if (success) {
-        debugPrint('🔄 [Provider] Refreshing listings after approve');
+        debugPrint('🔄 [AdminProvider] Refreshing listings after approve');
         await loadListings();
         return true;
       }
       return false;
     } catch (e, stack) {
       _error = 'Failed to approve listing';
-      debugPrint('❌ [Provider] approveListing error: $e');
+      debugPrint('❌ [AdminProvider] approveListing error: $e');
       debugPrint('📋 Stack: $stack');
       return false;
     } finally {
@@ -249,23 +262,24 @@ class AdminProvider with ChangeNotifier {
     }
   }
 
-  // ✅ IMPROVED: Remove listing with loading state & error handling
   Future<bool> removeListing(String listingId) async {
     _isLoading = true;
     notifyListeners();
     try {
-      debugPrint('🗑️ [Provider] Removing listing: $listingId');
+      debugPrint('🗑️ [AdminProvider] Removing listing: $listingId');
       final success = await _service.removeListing(listingId);
-      
       if (success) {
-        debugPrint('🔄 [Provider] Refreshing listings after remove');
-        await loadListings();
+        debugPrint('🔄 [AdminProvider] Refreshing listings AND dashboard');
+        await Future.wait([
+          loadListings(),      // Refresh listings list
+          loadDashboard(),     // ✅ Refresh dashboard stats
+        ]);
         return true;
       }
       return false;
     } catch (e, stack) {
       _error = 'Failed to remove listing';
-      debugPrint('❌ [Provider] removeListing error: $e');
+      debugPrint('❌ [AdminProvider] removeListing error: $e');
       debugPrint('📋 Stack: $stack');
       return false;
     } finally {
@@ -281,8 +295,11 @@ class AdminProvider with ChangeNotifier {
       debugPrint('🗑️ [AdminProvider] Removing donation: $donationId');
       final success = await _service.removeDonation(donationId);
       if (success) {
-        debugPrint('✅ [AdminProvider] Donation removed, refreshing list');
-        await loadDonations();
+        debugPrint('🔄 [AdminProvider] Refreshing donations AND dashboard');
+        await Future.wait([
+          loadDonations(),     // Refresh donations list
+          loadDashboard(),     // ✅ Refresh dashboard stats
+        ]);
       }
       return success;
     } catch (e) {
@@ -302,8 +319,11 @@ class AdminProvider with ChangeNotifier {
       debugPrint('✅ [AdminProvider] Resolving report: $reportId');
       final success = await _service.resolveReport(reportId);
       if (success) {
-        debugPrint('🔄 [AdminProvider] Report resolved, refreshing list');
-        await loadReports();
+        debugPrint('🔄 [AdminProvider] Refreshing reports AND dashboard');
+        await Future.wait([
+          loadReports(),       // Refresh reports list
+          loadDashboard(),     // ✅ Refresh dashboard stats
+        ]);
       }
       return success;
     } catch (e) {
@@ -323,8 +343,11 @@ class AdminProvider with ChangeNotifier {
       debugPrint('🗑️ [AdminProvider] Deleting report: $reportId');
       final success = await _service.deleteReport(reportId);
       if (success) {
-        debugPrint('🔄 [AdminProvider] Report deleted, refreshing list');
-        await loadReports();
+        debugPrint('🔄 [AdminProvider] Refreshing reports AND dashboard');
+        await Future.wait([
+          loadReports(),       // Refresh reports list
+          loadDashboard(),     // ✅ Refresh dashboard stats
+        ]);
       }
       return success;
     } catch (e) {

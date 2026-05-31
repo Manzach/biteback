@@ -73,9 +73,10 @@ class SellerService {
         'location': location,
         'photo_url': photoUrl,
         'created_at': DateTime.now().toIso8601String(),
+        // ✅ Use availability_status per Table 11 (not is_deleted)
+        'availability_status': 'Available',
         'is_sold': false,
         'is_hidden': false,
-        'is_deleted': false, // ✅ Default: not deleted
       };
 
       final response = await _supabase
@@ -92,18 +93,19 @@ class SellerService {
   }
 
   // ==================================================================
-  // FETCH SELLER'S LISTINGS (Excludes Soft-Deleted)
+  // ✅ FETCH SELLER'S LISTINGS - EXCLUDES ADMIN-DELETED ITEMS ✅
   // ==================================================================
   Future<List<FoodListing>> getSellerListings() async {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return [];
 
+      // ✅ Filter: Only this seller's listings + exclude admin-deleted ('Removed')
       final response = await _supabase
           .from('food_listings')
           .select()
           .eq('seller_id', userId)
-          .eq('is_deleted', false) // ✅ Exclude soft-deleted listings
+          .neq('availability_status', 'Removed') // ✅ Exclude admin-soft-deleted listings
           .order('created_at', ascending: false);
 
       final listings = (response as List)
@@ -111,6 +113,7 @@ class SellerService {
           .map((item) => FoodListing.fromJson(item))
           .toList();
 
+      debugPrint('📦 [SellerService] Fetched ${listings.length} listings (excluding Removed)');
       return listings;
     } catch (e) {
       debugPrint('❌ SellerService.getSellerListings error: $e');
@@ -166,11 +169,13 @@ class SellerService {
   }
 
   // ==================================================================
-  // ✅ SOFT DELETE LISTING (Preserves row for order history)
+  // ✅ SOFT DELETE LISTING - USES availability_status FIELD ✅
   // ==================================================================
-  /// Marks a listing as deleted instead of physically removing it.
+  /// Marks a listing as removed instead of physically deleting it.
   /// This preserves foreign key integrity with the orders table,
   /// allowing buyers to still view their past orders.
+  /// 
+  /// Uses availability_status = 'Removed' per Table 11 (Food Listing)
   /// 
   /// Parameters:
   ///   - listingId: ID of the listing to soft-delete
@@ -191,16 +196,17 @@ class SellerService {
         return false;
       }
 
-      // ✅ SOFT DELETE: Update is_deleted flag instead of removing row
+      // ✅ SOFT DELETE: Update availability_status to 'Removed' per Table 11
+      // This aligns with admin moderation and buyer filtering logic
       debugPrint('🗑️ [SellerService] Executing soft-delete update...');
       
       await _supabase
           .from('food_listings')
-          .update({'is_deleted': true})
+          .update({'availability_status': 'Removed'})
           .eq('id', listingId)
           .eq('seller_id', userId);
 
-      debugPrint('✅ [SellerService] Listing marked as deleted (is_deleted=true)');
+      debugPrint('✅ [SellerService] Listing marked as Removed (availability_status=Removed)');
       return true;
       
     } catch (e, stack) {
@@ -220,7 +226,10 @@ class SellerService {
 
       await _supabase
           .from('food_listings')
-          .update({'is_sold': true})
+          .update({
+            'availability_status': 'Sold', // ✅ Use status field per Table 11
+            'is_sold': true,
+          })
           .eq('id', listingId)
           .eq('seller_id', userId);
 

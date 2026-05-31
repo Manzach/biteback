@@ -4,7 +4,7 @@
 // ============================================================================
 // Handles all Supabase authentication operations for BiteBack
 // - User registration with role assignment
-// - Login with profile fetching from 'profiles' table
+// - Login with profile fetching from 'profiles' table + status validation
 // - Session management and password reset
 // - Robust fallbacks for RLS policy failures
 // Aligns with FYP Report: UC-01, UC-02, UC-03, Section 4.2.1
@@ -91,7 +91,7 @@ class AuthService {
   }
 
   // ==================================================================
-  // SIGN IN: Authenticate + fetch profile with fallbacks
+  // ✅ SIGN IN: Authenticate + fetch profile + VALIDATE ACCOUNT STATUS
   // ==================================================================
   Future<UserModel?> signIn({
     required String email,
@@ -129,21 +129,35 @@ class AuthService {
         profileData = null;
       }
 
-      // 3. Build UserModel with robust fallbacks
+      // 3. 🔑 CRITICAL: Validate account status BEFORE granting access
+      final accountStatus = (profileData?['account_status'] as String?)?.toLowerCase() ?? 'active';
+      debugPrint('🔐 [AuthService] Account status check: "$accountStatus"');
+      
+      if (accountStatus != 'active') {
+        // Block access & clear session immediately
+        debugPrint('❌ [AuthService] Account is $accountStatus - blocking access');
+        await _client.auth.signOut();
+        throw Exception('Account is $accountStatus. Please contact administrator.');
+      }
+
+      // 4. Build UserModel with robust fallbacks
       return _buildUserFromAuthAndProfile(response.user!, profileData);
 
     } on AuthException catch (e) {
       debugPrint('❌ [AuthService] Signin AuthException: ${e.message}');
       rethrow;
-    } catch (e, stack) {
+    } catch (e) {
+      // Re-throw our custom status exception or generic error
+      if (e.toString().contains('Account is')) {
+        rethrow;
+      }
       debugPrint('❌ [AuthService] Signin unexpected error: $e');
-      debugPrint('📋 Stack: $stack');
       rethrow;
     }
   }
 
   // ==================================================================
-  // GET CURRENT USER: Check session + fetch profile
+  // GET CURRENT USER: Check session + fetch profile + status validation
   // ==================================================================
   Future<UserModel?> getCurrentUser() async {
     try {
@@ -168,6 +182,14 @@ class AuthService {
       } catch (e) {
         debugPrint('⚠️ [AuthService] getCurrentUser profile query failed: $e');
         profileData = null;
+      }
+
+      // 🔑 Validate account status for existing sessions
+      final accountStatus = (profileData?['account_status'] as String?)?.toLowerCase() ?? 'active';
+      if (accountStatus != 'active') {
+        debugPrint('❌ [AuthService] Session user account is $accountStatus - signing out');
+        await _client.auth.signOut();
+        return null;
       }
 
       return _buildUserFromAuthAndProfile(user, profileData);
@@ -242,7 +264,7 @@ class AuthService {
       debugPrint('🎭 [AuthService] role from auth metadata: "$userRole"');
     }
 
-    // 3. Extract account_status
+    // 3. Extract account_status (default to 'active' if missing)
     String accountStatus = profileData?['account_status'] as String? ?? 'active';
 
     // 4. Extract optional fields
