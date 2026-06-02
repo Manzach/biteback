@@ -44,21 +44,24 @@ class OrderModel {
   factory OrderModel.fromJson(Map<String, dynamic> json) {
     // ✅ Safely extract nested food_listings join (may not always be present)
     final listing = json['food_listings'] as Map<String, dynamic>?;
-    
+
+    // Helper to coerce various types (int, String, null) into a trimmed String
+    String toStr(dynamic v) => v == null ? '' : v.toString().trim();
+
     return OrderModel(
-      // ✅ Required fields with safe fallbacks
-      id: (json['id'] as String?)?.trim() ?? '',
-      buyerId: (json['buyer_id'] as String?)?.trim() ?? '',
-      listingId: (json['listing_id'] as String?)?.trim() ?? '',
-      
+      // ✅ Required fields with safe fallbacks (handle ints or different key names)
+      id: toStr(json['id'] ?? json['order_id']),
+      buyerId: toStr(json['buyer_id'] ?? json['buyerId']),
+      listingId: toStr(json['listing_id'] ?? json['listingId']),
+
       // ✅ Safe numeric parsing with fallback
       quantity: (json['quantity'] as num?)?.toInt() ?? 0,
-      
+
       // ✅ Status: lowercase per your DB, with fallback
-      status: (json['status'] as String?)?.toLowerCase() ?? 'pending',
-      
+      status: toStr(json['status']).isNotEmpty ? toStr(json['status']).toLowerCase() : 'pending',
+
       // ✅ Nullable qr_code (format: BB-{timestamp}-{buyer_id})
-      qrCode: json['qr_code'] as String?,
+      qrCode: (json['qr_code'] as String?) ?? toStr(json['qrCode'] ?? json['qr']),
       
       // ✅ Safe DateTime parsing with fallback to now
       createdAt: json['created_at'] != null 
@@ -73,12 +76,12 @@ class OrderModel {
       // ✅ Safely extract joined food_listings fields (all nullable)
       foodName: listing?['food_name'] as String?,
       foodPhotoUrl: listing?['photo_url'] as String?,
-      
+
       // ✅ Safe price parsing from listing's discounted_price
-      price: listing?['discounted_price'] != null 
-          ? (listing!['discounted_price'] as num?)?.toDouble() 
+      price: listing?['discounted_price'] != null
+          ? (listing!['discounted_price'] as num?)?.toDouble()
           : null,
-      
+
       // ✅ Pickup location from listing's location field
       pickupLocation: listing?['location'] as String?,
     );

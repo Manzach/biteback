@@ -117,12 +117,12 @@ class BuyerService {
             'food_name': foodName,           // ✅ Snapshot of food name
             'unit_price': unitPrice,         // ✅ Price per unit at purchase
             'total_price': totalPrice,       // ✅ Calculated total paid
-            'order_date': DateTime.now().toIso8601String(),
+            'created_at': DateTime.now().toIso8601String(), // ✅ FIXED: Changed from 'order_date' to 'created_at' to match DB schema
           })
           .select()
           .single();
 
-      debugPrint('✅ [BuyerService] Order created successfully with ID: ${response['order_id'] ?? response['id']}');
+      debugPrint('✅ [BuyerService] Order created successfully with ID: ${response['id']}');
       return OrderModel.fromJson(response);
       
     } on PostgrestException catch (e) {
@@ -137,10 +137,6 @@ class BuyerService {
         debugPrint('💡 FIX: Unique constraint violation - check orders table primary key');
       } else if (e.code == '23514') {
         debugPrint('💡 FIX: CHECK constraint violation - verify orders table has food_name/total_price columns');
-        debugPrint('💡 Run this SQL to fix:');
-        debugPrint('   ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS food_name TEXT;');
-        debugPrint('   ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS total_price NUMERIC DEFAULT 0;');
-        debugPrint('   ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS unit_price NUMERIC DEFAULT 0;');
       }
       throw Exception('Failed to create order: ${e.message}');
     } catch (e) {

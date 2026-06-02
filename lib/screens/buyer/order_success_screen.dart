@@ -89,7 +89,7 @@ class OrderSuccessScreen extends StatelessWidget {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
-                                  '• Item #${order.listingId.substring(0, 6)}',
+                                  '• Item #${order.listingId.length >= 6 ? order.listingId.substring(0, 6) : order.listingId}',
                                   style: const TextStyle(fontSize: 13),
                                 ),
                                 Text(
